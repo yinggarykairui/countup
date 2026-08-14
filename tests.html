@@ -440,6 +440,20 @@ li { overflow-wrap: anywhere; }
     }
   });
 
+  /* Defence in depth: a lone surrogate that arrives already broken must not
+     be handed on to encodeURIComponent either. */
+  test('a lone surrogate in a title is dropped, not passed on', function () {
+    eq(C.clampTitle('a\uD800b').text, 'ab');
+    eq(C.clampTitle('a\uDFFFb').text, 'ab');
+    eq(C.clampTitle('\uD800').text, '');
+    eq(C.clampTitle('ok\uD83C').text, 'ok');
+    eq(C.clampTitle('🎉 kept').text, '🎉 kept');
+    var hash = C.serialiseHash({
+      title: C.clampTitle('half\uD800pair').text, date: '2026-01-01'
+    });
+    eq(C.parseHash(hash).title, 'halfpair');
+  });
+
   test('the cap counts code points, not UTF-16 units', function () {
     var emoji = new Array(C.MAX_TITLE + 1).join('🎉');   // 120 emoji
     var r = C.clampTitle(emoji);
