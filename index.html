@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>countup — a days-since page whose state is in the link</title>
+<meta name="description" content="A days-since page whose whole state is in the link. Set a title and a date, send the URL, and the other person sees the same counter.">
+<style>
+/* Contrast, measured against the page background #fbfaf7:
+   ink #141414 17.65:1 · muted #5f5b54 6.47:1 · field rule #8a8578 3.53:1 ·
+   focus ring #2b5c9a 6.49:1. Button text #fbfaf7 on #141414 is 17.65:1.
+   Body text needs 4.5:1, meaningful marks 3:1. All clear. */
+:root {
+  --bg: #fbfaf7;
+  --ink: #141414;
+  --muted: #5f5b54;
+  --line: #8a8578;
+  --focus: #2b5c9a;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.5;
+}
+/* min-height, never height: a short viewport must fall back to ordinary
+   document scrolling. "safe center" keeps tall content from being centred
+   off the top of the screen; browsers without it drop the whole rule and
+   start at the top, which is also fine. */
+main {
+  max-width: 34rem;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 6vw, 3rem) clamp(1rem, 5vw, 2rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  gap: clamp(1.5rem, 5vw, 2.25rem);
+}
+h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1rem, 4vw, 1.1875rem);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.figure {
+  margin: 0;
+  font-size: clamp(2.75rem, 14vw, 7rem);
+  line-height: 0.95;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.unit {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1rem, 4.5vw, 1.375rem);
+  color: var(--muted);
+}
+.tick {
+  margin: 0.9rem 0 0;
+  font-size: 0.9375rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.notes p, .status {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+.notes p + p { margin-top: 0.25rem; }
+.notes:empty { display: none; }
+form { display: grid; gap: 1rem; margin: 0; }
+label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  font-size: 1rem;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.share { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+button {
+  padding: 0.55rem 1rem;
+  font: inherit;
+  font-size: 0.9375rem;
+  color: var(--bg);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.url {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+footer {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+}
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section id="counter" hidden>
+    <h1 id="title"></h1>
+    <p class="figure" id="figure"></p>
+    <p class="unit" id="unit"></p>
+    <p class="tick" id="tick"></p>
+  </section>
+
+  <div class="notes" id="notes" aria-live="polite"></div>
+
+  <form id="editor" autocomplete="off">
+    <div>
+      <label for="title-input">Title</label>
+      <input id="title-input" type="text" maxlength="120" spellcheck="false">
+    </div>
+    <div>
+      <label for="date-input">Date</label>
+      <input id="date-input" type="date">
+    </div>
+  </form>
+
+  <div class="share">
+    <button type="button" id="copy">Copy link</button>
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
+  <p class="url" id="url" hidden></p>
+
+  <footer>The counter lives in the link. Nothing is stored.</footer>
+</main>
+
+<script src="countup.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var C = window.Countup;
+  var BASE_TITLE = document.title;
+
+  var el = {
+    counter: document.getElementById('counter'),
+    title: document.getElementById('title'),
+    figure: document.getElementById('figure'),
+    unit: document.getElementById('unit'),
+    tick: document.getElementById('tick'),
+    notes: document.getElementById('notes'),
+    titleInput: document.getElementById('title-input'),
+    dateInput: document.getElementById('date-input'),
+    copy: document.getElementById('copy'),
+    status: document.getElementById('status'),
+    url: document.getElementById('url')
+  };
+
+  var state = { title: '', date: '' };
+  var notes = [];
+  var timer = null;
+  var writingHash = false;
+
+  /* Every string below reaches the page through textContent. User text is
+     never parsed as markup. */
+  function setNotes(list) {
+    if (list.join('\n') === notes.join('\n')) return;
+    notes = list;
+    while (el.notes.firstChild) el.notes.removeChild(el.notes.firstChild);
+    for (var i = 0; i < list.length; i++) {
+      var p = document.createElement('p');
+      p.textContent = list[i];
+      el.notes.appendChild(p);
+    }
+  }
+
+  function render(nowMs) {
+    if (!state.date) {
+      el.counter.hidden = true;
+      document.title = BASE_TITLE;
+      return;
+    }
+    var days = C.daysFrom(nowMs, state.date);
+    if (days === null) {          // unreachable: state.date is validated
+      el.counter.hidden = true;
+      return;
+    }
+    var said = C.phrase(days);
+    el.counter.hidden = false;
+    el.title.hidden = state.title === '';
+    el.title.textContent = state.title;
+    el.figure.textContent = said.figure;
+    el.unit.textContent = said.unit;
+    el.unit.hidden = said.unit === '';
+    el.tick.textContent = 'Next day in ' +
+      C.formatClock(C.untilNextMidnight(nowMs)) + '.';
+    document.title = (state.title ? state.title + ' — ' : '') +
+      (said.unit ? said.figure + ' ' + said.unit : 'today') + ' · countup';
+  }
+
+  function writeHash() {
+    var hash = C.serialiseHash(state);
+    var base = location.href.split('#')[0];
+    try {
+      history.replaceState(null, '', base + hash);
+    } catch (e) {
+      /* Some browsers refuse replaceState on file:// URLs. */
+      writingHash = true;
+      location.hash = hash.replace(/^#/, '');
+      writingHash = false;
+    }
+  }
+
+  function loadFromHash() {
+    var read = C.parseHash(location.hash);
+    state.title = read.title;
+    state.date = read.date;
+    el.titleInput.value = state.title;
+    el.dateInput.value = state.date;
+    setNotes(read.notes);
+    render(Date.now());
+  }
+
+  function onEdit() {
+    var clamped = C.clampTitle(el.titleInput.value);
+    state.title = clamped.text;
+    state.date = C.isValidDate(el.dateInput.value) ? el.dateInput.value : '';
+    setNotes(state.date ? [] : ['Pick a date to start the counter.']);
+    el.status.textContent = '';
+    el.url.hidden = true;
+    writeHash();
+    render(Date.now());
+  }
+
+  /* One interval, one Date.now() per tick, so the day number and the clock
+     can never disagree at a midnight rollover. */
+  function start() {
+    if (timer !== null) return;
+    timer = setInterval(function () { render(Date.now()); }, 1000);
+  }
+
+  function stop() {
+    if (timer === null) return;
+    clearInterval(timer);
+    timer = null;
+  }
+
+  function selectText(node) {
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(node);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) { /* selection is a convenience, not a requirement */ }
+  }
+
+  function copyFallback() {
+    el.url.textContent = location.href;
+    el.url.hidden = false;
+    selectText(el.url);
+    el.status.textContent = 'Copy was refused. The link is selected below — ' +
+      'press Ctrl+C or Cmd+C.';
+  }
+
+  el.copy.addEventListener('click', function () {
+    var url = location.href;
+    var done = function () {
+      el.url.hidden = true;
+      el.status.textContent = 'Link copied.';
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, copyFallback);
+      } else {
+        copyFallback();
+      }
+    } catch (e) {
+      copyFallback();
+    }
+  });
+
+  el.titleInput.addEventListener('input', onEdit);
+  el.dateInput.addEventListener('input', onEdit);
+  el.dateInput.addEventListener('change', onEdit);
+
+  window.addEventListener('hashchange', function () {
+    if (writingHash) return;
+    loadFromHash();
+  });
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      stop();
+    } else {
+      render(Date.now());
+      start();
+    }
+  });
+
+  loadFromHash();
+  start();
+})();
+</script>
+</body>
+</html>
