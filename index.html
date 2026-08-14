@@ -234,22 +234,35 @@ footer {
       (said.unit ? said.figure + ' ' + said.unit : 'today') + ' · countup';
   }
 
+  /* The address bar is a convenience; the counter on screen is the product.
+     Anything that goes wrong writing the hash is swallowed here so that one
+     bad string can never stop the page from rendering or ticking. */
   function writeHash() {
-    var hash = C.serialiseHash(state);
-    if (hash === location.hash || (hash === '' && location.hash === '#')) return;
-    var base = location.href.split('#')[0];
     try {
-      history.replaceState(null, '', base + hash);
+      var hash = C.serialiseHash(state);
+      if (hash === location.hash ||
+          (hash === '' && location.hash === '#')) return;
+      var base = location.href.split('#')[0];
+      try {
+        history.replaceState(null, '', base + hash);
+      } catch (e) {
+        /* Some browsers refuse replaceState on file:// URLs. */
+        writingHash = true;
+        location.hash = hash.replace(/^#/, '');
+        writingHash = false;
+      }
     } catch (e) {
-      /* Some browsers refuse replaceState on file:// URLs. */
-      writingHash = true;
-      location.hash = hash.replace(/^#/, '');
       writingHash = false;
     }
   }
 
   function loadFromHash() {
-    var read = C.parseHash(location.hash);
+    var read;
+    try {
+      read = C.parseHash(location.hash);
+    } catch (e) {
+      read = { title: '', date: '', notes: ['That link could not be read.'] };
+    }
     state.title = read.title;
     state.date = read.date;
     el.titleInput.value = state.title;
@@ -277,7 +290,11 @@ footer {
      can never disagree at a midnight rollover. */
   function start() {
     if (timer !== null) return;
-    timer = setInterval(function () { render(Date.now()); }, 1000);
+    timer = setInterval(function () {
+      try {
+        render(Date.now());
+      } catch (e) { /* a dead tick must not become a dead page */ }
+    }, 1000);
   }
 
   function stop() {
@@ -339,7 +356,13 @@ footer {
     }
   });
 
-  loadFromHash();
+  /* start() runs whatever the link said. A counter that cannot be read is a
+     page with an empty form on it, not a page that never wakes up. */
+  try {
+    loadFromHash();
+  } catch (e) {
+    setNotes(['That link could not be read.']);
+  }
   start();
 })();
 </script>

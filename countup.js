@@ -85,10 +85,48 @@
     };
   }
 
-  function clampTitle(text) {
+  /* Splits a string into code points, dropping any unpaired surrogate.
+     slice() counts UTF-16 units, so cutting a title at 120 units can land
+     between the two halves of an emoji and leave a lone surrogate;
+     encodeURIComponent then throws URIError on it and the page dies. A
+     grapheme cluster (a flag, a ZWJ family) can still be split by a
+     code-point cut, which is cosmetic — a split surrogate pair is a crash. */
+  function codePoints(t) {
+    var out = [];
+    for (var i = 0; i < t.length; i++) {
+      var c = t.charCodeAt(i);
+      if (c >= 0xd800 && c <= 0xdbff) {
+        var low = i + 1 < t.length ? t.charCodeAt(i + 1) : 0;
+        if (low >= 0xdc00 && low <= 0xdfff) {
+          out.push(t.charAt(i) + t.charAt(i + 1));
+          i++;
+        }
+        continue;                        // lone high surrogate: drop it
+      }
+      if (c >= 0xdc00 && c <= 0xdfff) continue;   // lone low surrogate
+      out.push(t.charAt(i));
+    }
+    return out;
+  }
+
+  /* A title has to survive being a caption, an input value and a hash at the
+     same time. Control characters cannot: a newline shows as a space in the
+     caption, vanishes in a single-line field, and the first keystroke then
+     writes the shortened form back to the hash. Turn them into the space
+     they already look like, at parse time, so all three agree. */
+  function cleanTitle(text) {
     var t = String(text == null ? '' : text);
-    if (t.length <= MAX_TITLE) return { text: t, truncated: false };
-    return { text: t.slice(0, MAX_TITLE), truncated: true };
+    t = t.replace(/\r\n/g, ' ')
+         .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
+    return codePoints(t);
+  }
+
+  function clampTitle(text) {
+    var cps = cleanTitle(text);
+    if (cps.length <= MAX_TITLE) {
+      return { text: cps.join(''), truncated: false };
+    }
+    return { text: cps.slice(0, MAX_TITLE).join(''), truncated: true };
   }
 
   /* Reads '#t=...&d=...'. Never throws: decodeURIComponent rejects lone
