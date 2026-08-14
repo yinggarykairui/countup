@@ -65,7 +65,7 @@ li { overflow-wrap: anywhere; }
       ' in ' + JSON.stringify(list));
   }
 
-  /* Calendar days between two ISO dates, built from local midnights. */
+  /* Calendar days between two ISO dates, each carried as its UTC midnight. */
   function days(a, b) {
     return C.wholeDays(C.parseDate(a), C.parseDate(b));
   }
@@ -136,19 +136,50 @@ li { overflow-wrap: anywhere; }
     eq(C.parseDate({}), null);
   });
 
-  test('parseDate keeps two-digit years as years 0000-0099', function () {
+  /* The date field cannot hold year 0000, so nothing else may either:
+     #d=0000-01-01 used to render 740207 days over an empty field, and the
+     next keystroke dropped the date without a word. */
+  test('parseDate rejects year 0000', function () {
+    eq(C.parseDate('0000-01-01'), null);
+    eq(C.parseDate('0000-12-31'), null);
+    eq(C.parseDate('0001-01-01').getUTCFullYear(), 1);
+  });
+
+  test('a hash date the field cannot hold is refused, not rendered',
+    function () {
+      var r = C.parseHash('#d=0000-01-01');
+      eq(r.date, '');
+      has(r.notes, 'not a real date');
+    });
+
+  /* Samoa has no local 2011-12-30 at any hour, so a local Date built for it
+     lands on the 31st. A calendar day is not an instant. */
+  test('parseDate accepts a day that has no local instant', function () {
+    var d = C.parseDate('2011-12-30');
+    ok(d !== null, 'accepted');
+    eq(d.getUTCFullYear(), 2011); eq(d.getUTCMonth(), 11);
+    eq(d.getUTCDate(), 30);
+    eq(C.parseDate('1994-12-31').getUTCDate(), 31);
+  });
+
+  test('parseDate keeps two-digit years as years 0001-0099', function () {
     var d = C.parseDate('0099-01-02');
     eq(d.getUTCFullYear(), 99);
     eq(days('0099-01-02', '0099-01-03'), 1);
   });
 
-  /* ---- whole days across DST ------------------------------------------ */
+  /* ---- whole days across DST and the dateline -------------------------- */
 
   /* These spans each straddle a real transition somewhere in the world. The
      answers are calendar answers, so they hold whatever zone the page runs
      in; the suite is also driven under several zones by the headless runner
-     (Pacific/Chatham +12:45/+13:45, Australia/Lord_Howe +10:30/+11:00,
-     America/Santiago, America/New_York, Europe/London, Asia/Kolkata, UTC). */
+     (Pacific/Apia, Pacific/Kiritimati, Pacific/Chatham +12:45/+13:45,
+     Australia/Lord_Howe +10:30/+11:00, America/Santiago, America/New_York,
+     Europe/London, Asia/Kolkata, UTC).
+
+     The last two are dateline jumps, not DST: Samoa deleted 2011-12-30 and
+     Kiritimati deleted 1994-12-31, so those local days are 24 hours short
+     and any answer built out of elapsed time is one day light. */
   var dstSpans = [
     ['2026-03-07', '2026-03-09', 2],   // US spring forward, 23 h day
     ['2026-03-08', '2026-03-09', 1],
@@ -161,7 +192,11 @@ li { overflow-wrap: anywhere; }
     ['2026-04-04', '2026-04-06', 2],   // NZ / Chatham fall back
     ['2026-09-05', '2026-09-07', 2],   // Chile spring forward
     ['2026-03-08', '2026-11-02', 239], // both US transitions in one span
-    ['1969-07-20', '2026-08-14', 20844]
+    ['1969-07-20', '2026-08-14', 20844],
+    ['2011-12-29', '2011-12-31', 2],   // Samoa: no 2011-12-30 at all
+    ['2011-12-29', '2012-01-02', 4],
+    ['1994-12-30', '1995-01-01', 2],   // Kiritimati: no 1994-12-31
+    ['1969-07-20', '2023-01-01', 19523]
   ];
   for (var i = 0; i < dstSpans.length; i++) {
     (function (span) {
@@ -224,6 +259,38 @@ li { overflow-wrap: anywhere; }
     eq(C.daysFrom(Date.now(), '2026-02-31'), null);
     eq(C.daysFrom(Date.now(), ''), null);
   });
+
+  /* The repro that started this: under Pacific/Apia, a millisecond quotient
+     between two local midnights reads 19522 because Samoa's missing day is
+     counted as one that happened. Every calendar says 19523. */
+  test('daysFrom is right across a dateline jump', function () {
+    eq(C.daysFrom(new Date(2023, 0, 1, 12, 0, 0).getTime(), '1969-07-20'),
+      -19523);
+    eq(C.daysFrom(new Date(2011, 11, 29, 12, 0, 0).getTime(), '2011-12-31'),
+      2, 'Samoa deleted 2011-12-30');
+    eq(C.daysFrom(new Date(1994, 11, 30, 12, 0, 0).getTime(), '1995-01-01'),
+      2, 'Kiritimati deleted 1994-12-31');
+  });
+
+  /* Hourly for four years: whatever the local clock did in the night — a
+     DST shift, a half-hour offset change, a whole day deleted — the day the
+     visitor is standing in has to read as today, and tomorrow as one day. */
+  test('every hour of 2010-2014 reads its own local day as today',
+    function () {
+      var bad = 0, first = '';
+      for (var t = Date.UTC(2010, 0, 1); t < Date.UTC(2014, 0, 1);
+           t += 3600000) {
+        var d = new Date(t);
+        var iso = d.getFullYear() + '-' +
+          (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' +
+          (d.getDate() < 10 ? '0' : '') + d.getDate();
+        if (C.daysFrom(t, iso) !== 0) {
+          bad++;
+          if (!first) first = iso + ' at ' + d.toString();
+        }
+      }
+      eq(bad, 0, 'mismatched hours (first: ' + first + ')');
+    });
 
   test('daysFrom is right across a spring-forward run of days', function () {
     var start = localMidnight(2026, 3, 6);
@@ -330,6 +397,84 @@ li { overflow-wrap: anywhere; }
     eq(C.clampTitle(undefined).text, '');
   });
 
+  /* The hole B1 lived in: clamping was tested, serialising was tested, and
+     a clamped title was never handed to serialiseHash. Cutting 120 UTF-16
+     units through an emoji leaves a lone surrogate, and encodeURIComponent
+     throws URIError on one — which killed the whole page, not just the
+     title. */
+  test('a clamped title always survives serialiseHash', function () {
+    var tail = ['🎉', '👍🏽', '🇳🇿', '👩‍👩‍👧', 'é', '日', 'x'];
+    for (var t = 0; t < tail.length; t++) {
+      for (var pre = 114; pre <= 122; pre++) {
+        var title = new Array(pre + 1).join('x') + tail[t] + 'tail🎂';
+        var clamped = C.clampTitle(title);
+        var hash;
+        try {
+          hash = C.serialiseHash({ title: clamped.text, date: '2026-01-01' });
+        } catch (e) {
+          throw new Error('serialiseHash threw on a title clamped at ' +
+            pre + ' + ' + tail[t] + ': ' + e);
+        }
+        var back = C.parseHash(hash);
+        eq(back.title, clamped.text, 'round trip at ' + pre + ' ' + tail[t]);
+        eq(back.date, '2026-01-01', 'date survived');
+      }
+    }
+  });
+
+  test('a clamped title never ends in half a surrogate pair', function () {
+    var base = new Array(200).join('🎉');       // every char pair is one emoji
+    for (var cut = 0; cut < 200; cut++) {
+      var text = C.clampTitle(base.slice(0, cut)).text;
+      for (var i = 0; i < text.length; i++) {
+        var c = text.charCodeAt(i);
+        if (c >= 0xd800 && c <= 0xdbff) {
+          var low = text.charCodeAt(i + 1);
+          ok(low >= 0xdc00 && low <= 0xdfff, 'lone high surrogate at ' + cut);
+          i++;
+        } else {
+          ok(!(c >= 0xdc00 && c <= 0xdfff), 'lone low surrogate at ' + cut);
+        }
+      }
+      C.serialiseHash({ title: text, date: '2026-01-01' });   // must not throw
+    }
+  });
+
+  test('the cap counts code points, not UTF-16 units', function () {
+    var emoji = new Array(C.MAX_TITLE + 1).join('🎉');   // 120 emoji
+    var r = C.clampTitle(emoji);
+    eq(r.truncated, false, '120 emoji fit');
+    eq(r.text, emoji);
+    var over = C.clampTitle(emoji + '🎉');
+    eq(over.truncated, true);
+    eq(over.text, emoji);
+  });
+
+  /* ---- control characters in a title ----------------------------------- */
+
+  /* A newline used to reach the caption but not the single-line field, so
+     the field and the state disagreed and the first keystroke silently
+     rewrote the hash. */
+  test('control characters become spaces', function () {
+    eq(C.clampTitle('line\nbreak').text, 'line break');
+    eq(C.clampTitle('tab\tsep').text, 'tab sep');
+    eq(C.clampTitle('crlf\r\nhere').text, 'crlf here');
+    eq(C.clampTitle('bell\u0007null\u0000').text, 'bell null ');
+    eq(C.clampTitle('u2028\u2028sep').text, 'u2028 sep');
+    eq(C.clampTitle('plain').text, 'plain');
+    eq(C.clampTitle('  padded  ').text, '  padded  ');
+  });
+
+  test('a newline in the hash agrees with the field and the hash', function () {
+    var r = C.parseHash('#t=line%0Abreak&d=2026-08-14');
+    eq(r.title, 'line break');
+    /* what the field would hold is what the state holds, so writing it back
+       out changes nothing */
+    var again = C.parseHash(C.serialiseHash(r));
+    eq(again.title, r.title, 'stable second time round');
+    eq(C.serialiseHash(again), C.serialiseHash(r), 'hash is stable');
+  });
+
   /* ---- hash parsing: the spec's garbage list --------------------------- */
 
   test('a good hash parses', function () {
@@ -366,11 +511,14 @@ li { overflow-wrap: anywhere; }
     has(r.notes, 'no date');
   });
 
-  test('a missing t says so and keeps the date', function () {
+  /* The link works; the note is an invitation, not a dead end. */
+  test('a missing t invites a title and keeps the date', function () {
     var r = C.parseHash('#d=2026-01-01');
     eq(r.title, '');
     eq(r.date, '2026-01-01');
+    eq(r.notes.length, 1);
     has(r.notes, 'no title');
+    has(r.notes, 'Add one below');
   });
 
   test('a 10,000-character title in the hash is clamped', function () {
