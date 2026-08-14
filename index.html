@@ -41,7 +41,17 @@ main {
   justify-content: safe center;
   gap: clamp(1.5rem, 5vw, 2.25rem);
 }
-h1 {
+/* The page needs one stable heading. The counter's own title is caption
+   text below it, because that string comes from a stranger's link. */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+}
+.caption {
   margin: 0 0 0.35rem;
   font-size: clamp(1rem, 4vw, 1.1875rem);
   font-weight: 500;
@@ -129,8 +139,10 @@ footer {
 </head>
 <body>
 <main>
+  <h1 class="sr-only">countup</h1>
+
   <section id="counter" hidden>
-    <h1 id="title"></h1>
+    <p class="caption" id="title"></p>
     <p class="figure" id="figure"></p>
     <p class="unit" id="unit"></p>
     <p class="tick" id="tick"></p>
@@ -224,6 +236,7 @@ footer {
 
   function writeHash() {
     var hash = C.serialiseHash(state);
+    if (hash === location.hash || (hash === '' && location.hash === '#')) return;
     var base = location.href.split('#')[0];
     try {
       history.replaceState(null, '', base + hash);
@@ -242,6 +255,10 @@ footer {
     el.titleInput.value = state.title;
     el.dateInput.value = state.date;
     setNotes(read.notes);
+    /* Rewrite anything the link got wrong — a clamped title, a date that is
+       not a date — so the address bar always reproduces the screen and the
+       copy button hands on a link that works. The notes say what changed. */
+    writeHash();
     render(Date.now());
   }
 
