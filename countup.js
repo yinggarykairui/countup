@@ -13,21 +13,41 @@
 
   var ISO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-  /* Strict YYYY-MM-DD. new Date(2026, 1, 31) rolls into March instead of
-     failing, so the constructed date is read back and compared. */
+  /* The instant that (y, m, d) starts at in UTC, where every day is exactly
+     86,400,000 ms long. Date.UTC maps years 0-99 onto 1900-1999, so an early
+     year is put back by hand — a link carrying one should not be called
+     unreal. */
+  function utcDay(y, m, d) {
+    var ms = Date.UTC(y, m, d);
+    if (y >= 0 && y < 100) {
+      var probe = new Date(ms);
+      probe.setUTCFullYear(y, m, d);
+      ms = probe.getTime();
+    }
+    return ms;
+  }
+
+  /* Strict YYYY-MM-DD, returned as the Date whose *UTC* midnight is that
+     calendar day. Read it back with getUTC*().
+
+     A calendar day is not an instant, and asking for a local one can fail:
+     Samoa jumped the dateline at the end of 2011 and had no local
+     2011-12-30 at any hour, so new Date(2011, 11, 30) silently lands on the
+     31st. UTC has no such holes, no DST and no 23- or 25-hour days, so the
+     date written down always survives the round trip.
+
+     Date.UTC(2026, 1, 31) still rolls into March instead of failing, so the
+     constructed date is read back and compared. Year 0000 is refused: the
+     date field cannot hold it. */
   function parseDate(text) {
     if (typeof text !== 'string') return null;
     var m = ISO.exec(text);
     if (!m) return null;
     var y = +m[1], mo = +m[2], d = +m[3];
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-    var probe = new Date(y, mo - 1, d);
-    /* new Date(99, 0, 2) means 1999, not year 99. Restore the literal year
-       so a link carrying an early date is not called unreal. */
-    if (y >= 0 && y < 100) probe.setFullYear(y, mo - 1, d);
-    probe.setHours(0, 0, 0, 0);
-    if (probe.getFullYear() !== y || probe.getMonth() !== mo - 1 ||
-        probe.getDate() !== d) return null;
+    if (y < 1 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    var probe = new Date(utcDay(y, mo - 1, d));
+    if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 ||
+        probe.getUTCDate() !== d) return null;
     return probe;
   }
 
@@ -35,16 +55,22 @@
     return parseDate(text) !== null;
   }
 
-  function midnight(ms) {
-    var d = new Date(ms);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  /* The visitor's today: the calendar day nowMs falls on by the *local*
+     clock, carried as a UTC-midnight Date like every other date here. */
+  function today(nowMs) {
+    var d = new Date(nowMs);
+    return new Date(utcDay(d.getFullYear(), d.getMonth(), d.getDate()));
   }
 
-  /* Whole calendar days between two local midnights. Rounding, not flooring a
-     raw millisecond quotient: a span crossing a DST change is 23 or 25 hours
-     long and floor() would be off by one. */
+  /* Whole calendar days between two dates, both read as UTC (y, m, d) and
+     differenced in UTC space. No elapsed local time is measured at all, so
+     the answer cannot be moved by a DST change, by a half-hour zone or by a
+     dateline jump; it is exact by construction. */
   function wholeDays(fromDate, toDate) {
-    return Math.round((toDate.getTime() - fromDate.getTime()) / MS_PER_DAY);
+    return (utcDay(toDate.getUTCFullYear(), toDate.getUTCMonth(),
+        toDate.getUTCDate()) -
+      utcDay(fromDate.getUTCFullYear(), fromDate.getUTCMonth(),
+        fromDate.getUTCDate())) / MS_PER_DAY;
   }
 
   /* Signed days from the local day containing nowMs to the target date.
@@ -52,7 +78,7 @@
   function daysFrom(nowMs, dateText) {
     var target = parseDate(dateText);
     if (!target) return null;
-    return wholeDays(midnight(nowMs), target);
+    return wholeDays(today(nowMs), target);
   }
 
   /* Time left before the day number changes, i.e. until the next local
@@ -204,7 +230,6 @@
     MAX_TITLE: MAX_TITLE,
     parseDate: parseDate,
     isValidDate: isValidDate,
-    midnight: midnight,
     wholeDays: wholeDays,
     daysFrom: daysFrom,
     untilNextMidnight: untilNextMidnight,

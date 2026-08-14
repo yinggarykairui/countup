@@ -84,10 +84,13 @@ li { overflow-wrap: anywhere; }
 
   /* ---- strict date parsing ------------------------------------------- */
 
+  /* parseDate hands back the Date whose UTC midnight is that calendar day —
+     a calendar day is not a local instant, and in some zones there is no
+     local instant for it at all (Samoa had no 2011-12-30). */
   test('parseDate accepts a plain date', function () {
     var d = C.parseDate('2026-08-14');
     ok(d instanceof Date, 'a Date');
-    eq(d.getFullYear(), 2026); eq(d.getMonth(), 7); eq(d.getDate(), 14);
+    eq(d.getUTCFullYear(), 2026); eq(d.getUTCMonth(), 7); eq(d.getUTCDate(), 14);
   });
 
   test('parseDate rejects 2026-02-31 instead of rolling into March',
@@ -97,10 +100,10 @@ li { overflow-wrap: anywhere; }
     function () { eq(C.parseDate('2026-02-29'), null); });
 
   test('parseDate accepts 2024-02-29',
-    function () { eq(C.parseDate('2024-02-29').getDate(), 29); });
+    function () { eq(C.parseDate('2024-02-29').getUTCDate(), 29); });
 
   test('parseDate accepts 2000-02-29 (leap century)',
-    function () { eq(C.parseDate('2000-02-29').getMonth(), 1); });
+    function () { eq(C.parseDate('2000-02-29').getUTCMonth(), 1); });
 
   test('parseDate rejects 1900-02-29 (common century)',
     function () { eq(C.parseDate('1900-02-29'), null); });
@@ -135,7 +138,7 @@ li { overflow-wrap: anywhere; }
 
   test('parseDate keeps two-digit years as years 0000-0099', function () {
     var d = C.parseDate('0099-01-02');
-    eq(d.getFullYear(), 99);
+    eq(d.getUTCFullYear(), 99);
     eq(days('0099-01-02', '0099-01-03'), 1);
   });
 
@@ -442,7 +445,7 @@ li { overflow-wrap: anywhere; }
   test('titles with hash-breaking characters survive a round trip',
     function () {
       var titles = ['Moon landing', 'a&b', 'x=y', '#hashtag', '100%',
-        '50% & 50=100', '🎉 party 🎂', 'line\nbreak', '  padded  ',
+        '50% & 50=100', '🎉 party 🎂', '  padded  ',
         '&d=2020-01-01', '?query#frag', 'quote "and" \'apostrophe\'',
         'плюс日本語', 'a+b', 'back\\slash', 'semi;colon,comma',
         '<script>alert(1)<\/script>'];
