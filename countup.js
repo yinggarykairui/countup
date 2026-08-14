@@ -185,7 +185,10 @@
     }
 
     if (rawTitle === null || rawTitle === '') {
-      out.notes.push('The link has no title.');
+      /* An invitation, not a verdict: a titleless link still counts days
+         perfectly well, and the only thing left to say is what the reader
+         could do next. */
+      out.notes.push('The link has no title. Add one below if you like.');
     } else {
       var clamped = clampTitle(rawTitle);
       out.title = clamped.text;
@@ -215,7 +218,9 @@
     }
   }
 
-  /* Round-trips titles holding & = # % newlines and emoji. */
+  /* Round-trips titles holding & = # % and emoji. Control characters do not
+     survive as themselves — clampTitle turned them into spaces before they
+     ever reached the state. */
   function serialiseHash(state) {
     var parts = [];
     var title = state && state.title ? String(state.title) : '';

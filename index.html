@@ -51,6 +51,32 @@ main {
   overflow: hidden;
   white-space: nowrap;
 }
+/* The page name is a screen-reader heading while a counter is on screen —
+   the counter is the product, not the brand. With no counter there is
+   nothing else to look at, so it becomes the visible name of the page and
+   brings one sentence of explanation with it. display: contents keeps the
+   wrapper out of the flex layout (and out of its gaps) the rest of the
+   time. */
+#intro { display: contents; }
+main.empty #intro { display: block; }
+main.empty #pagename {
+  position: static;
+  width: auto; height: auto;
+  margin: 0;
+  clip-path: none;
+  overflow: visible;
+  white-space: normal;
+  font-size: clamp(1.5rem, 7vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+#lede {
+  margin: 0.5rem 0 0;
+  max-width: 30rem;
+  font-size: 1rem;
+  color: var(--muted);
+}
 .caption {
   margin: 0 0 0.35rem;
   font-size: clamp(1rem, 4vw, 1.1875rem);
@@ -59,9 +85,12 @@ main {
   color: var(--muted);
   overflow-wrap: anywhere;
 }
+/* The figure is sized off whichever axis is scarcer. Keyed off vw alone it
+   reached 7rem on a 844px-wide landscape phone and pushed the date field
+   and the copy button off a 390px-tall screen. */
 .figure {
   margin: 0;
-  font-size: clamp(2.75rem, 14vw, 7rem);
+  font-size: clamp(2.75rem, min(14vw, 22vh), 7rem);
   line-height: 0.95;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -95,9 +124,11 @@ label {
   text-transform: uppercase;
   color: var(--muted);
 }
+/* 44px is the floor for anything a thumb has to hit. */
 input {
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   padding: 0.55rem 0.65rem;
   font: inherit;
   font-size: 1rem;
@@ -108,6 +139,7 @@ input {
 }
 .share { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 button {
+  min-height: 44px;
   padding: 0.55rem 1rem;
   font: inherit;
   font-size: 0.9375rem;
@@ -133,20 +165,40 @@ footer {
   border-top: 1px solid var(--line);
   padding-top: 0.75rem;
 }
+/* A landscape phone has vertical room for about one thing. Tighten the
+   frame rather than the content; portrait and desktop are untouched. */
+@media (orientation: landscape) and (max-height: 30rem) {
+  main {
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    gap: 1rem;
+  }
+}
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
-  <h1 class="sr-only">countup</h1>
+  <div id="intro">
+    <h1 class="sr-only" id="pagename">countup</h1>
+    <p id="lede" hidden>countup counts the whole days since or until a date
+      and keeps the counter in its own link — pick a date below to start
+      one.</p>
+  </div>
 
   <section id="counter" hidden>
     <p class="caption" id="title"></p>
-    <p class="figure" id="figure"></p>
-    <p class="unit" id="unit"></p>
+    <p class="figure" id="figure" aria-hidden="true"></p>
+    <p class="unit" id="unit" aria-hidden="true"></p>
     <p class="tick" id="tick"></p>
   </section>
+
+  <!-- The counter's sentence, announced once when it changes. The figure and
+       the unit above are aria-hidden so it is not read twice, and the ticking
+       line is deliberately outside this region: it must not be announced
+       every second. -->
+  <p class="sr-only" id="announce" aria-live="polite"></p>
 
   <div class="notes" id="notes" aria-live="polite"></div>
 
@@ -157,7 +209,9 @@ footer {
     </div>
     <div>
       <label for="date-input">Date</label>
-      <input id="date-input" type="date">
+      <!-- The counter can only render a four-digit year, so the field is not
+           allowed to hold anything else. -->
+      <input id="date-input" type="date" min="0001-01-01" max="9999-12-31">
     </div>
   </form>
 
@@ -179,7 +233,10 @@ footer {
   var BASE_TITLE = document.title;
 
   var el = {
+    main: document.querySelector('main'),
+    lede: document.getElementById('lede'),
     counter: document.getElementById('counter'),
+    announce: document.getElementById('announce'),
     title: document.getElementById('title'),
     figure: document.getElementById('figure'),
     unit: document.getElementById('unit'),
@@ -196,6 +253,8 @@ footer {
   var notes = [];
   var timer = null;
   var writingHash = false;
+  var announced = '';
+  var statusTimer = null;
 
   /* Every string below reaches the page through textContent. User text is
      never parsed as markup. */
@@ -210,19 +269,42 @@ footer {
     }
   }
 
+  /* The counter's sentence, once, when it changes. Re-writing the same text
+     would make a screen reader say it again for nothing, and the ticking
+     line is never sent here — a countdown announced every second is a
+     countdown nobody can listen past. */
+  function announce(sentence) {
+    if (sentence === announced) return;
+    announced = sentence;
+    el.announce.textContent = sentence;
+  }
+
+  /* With no counter to show, the page says what it is and what to do. */
+  function showIntro(on) {
+    if (el.main.classList.contains('empty') === on) return;
+    el.main.classList.toggle('empty', on);
+    el.lede.hidden = !on;
+  }
+
   function render(nowMs) {
     if (!state.date) {
       el.counter.hidden = true;
+      showIntro(true);
+      announce('');
       document.title = BASE_TITLE;
       return;
     }
     var days = C.daysFrom(nowMs, state.date);
     if (days === null) {          // unreachable: state.date is validated
       el.counter.hidden = true;
+      showIntro(true);
+      announce('');
       return;
     }
     var said = C.phrase(days);
     el.counter.hidden = false;
+    showIntro(false);
+    announce(said.unit ? said.figure + ' ' + said.unit + '.' : said.figure + '.');
     el.title.hidden = state.title === '';
     el.title.textContent = state.title;
     el.figure.textContent = said.figure;
@@ -268,6 +350,9 @@ footer {
     el.titleInput.value = state.title;
     el.dateInput.value = state.date;
     setNotes(read.notes);
+    /* The old status was about the old link. */
+    setStatus('');
+    el.url.hidden = true;
     /* Rewrite anything the link got wrong — a clamped title, a date that is
        not a date — so the address bar always reproduces the screen and the
        copy button hands on a link that works. The notes say what changed. */
@@ -275,12 +360,30 @@ footer {
     render(Date.now());
   }
 
+  /* A date field can hold a year of five or more digits — one stray keystroke
+     turns 2026 into 20260 — and the counter has no way to show that. Say
+     which part is wrong instead of asking for a date that is already
+     typed in. */
+  function dateProblem(typed) {
+    var v = el.dateInput.validity;
+    var m = /^(\d+)-(\d{2})-(\d{2})$/.exec(typed);
+    /* badInput: the field is showing something it cannot hand over as a
+       date, which is what a five-digit year looks like from here. */
+    if ((typed === '' && v && v.badInput) ||
+        (m && (m[1].length > 4 || +m[1] < 1))) {
+      return 'That year is out of range. Use a year between 0001 and 9999.';
+    }
+    if (typed === '') return 'Pick a date to start the counter.';
+    return 'That date cannot be used. Pick another one.';
+  }
+
   function onEdit() {
     var clamped = C.clampTitle(el.titleInput.value);
     state.title = clamped.text;
-    state.date = C.isValidDate(el.dateInput.value) ? el.dateInput.value : '';
-    setNotes(state.date ? [] : ['Pick a date to start the counter.']);
-    el.status.textContent = '';
+    var typed = el.dateInput.value;
+    state.date = C.isValidDate(typed) ? typed : '';
+    setNotes(state.date ? [] : [dateProblem(typed)]);
+    setStatus('');
     el.url.hidden = true;
     writeHash();
     render(Date.now());
@@ -313,19 +416,42 @@ footer {
     } catch (e) { /* selection is a convenience, not a requirement */ }
   }
 
+  /* Cleared first, then set on the next turn: pressing Copy twice produces
+     the same sentence, and a live region that is handed the text it already
+     holds says nothing at all. */
+  function setStatus(text) {
+    if (statusTimer !== null) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+    }
+    el.status.textContent = '';
+    if (text === '') return;
+    statusTimer = setTimeout(function () {
+      statusTimer = null;
+      el.status.textContent = text;
+    }, 50);
+  }
+
   function copyFallback() {
     el.url.textContent = location.href;
     el.url.hidden = false;
     selectText(el.url);
-    el.status.textContent = 'Copy was refused. The link is selected below — ' +
-      'press Ctrl+C or Cmd+C.';
+    setStatus('Copy was refused. The link is selected below — ' +
+      'press Ctrl+C or Cmd+C.');
   }
 
   el.copy.addEventListener('click', function () {
+    /* The button's one job is handing on a counter. With no date there is no
+       counter, and saying "Link copied." would be a lie about a blank page. */
+    if (!state.date) {
+      el.url.hidden = true;
+      setStatus('Pick a date first — there is nothing to share yet.');
+      return;
+    }
     var url = location.href;
     var done = function () {
       el.url.hidden = true;
-      el.status.textContent = 'Link copied.';
+      setStatus('Link copied.');
     };
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
