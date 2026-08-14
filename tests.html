@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>countup tests</title>
+<meta name="description" content="In-page tests for the countup logic in countup.js.">
+<style>
+body {
+  margin: 0;
+  padding: 1.5rem;
+  background: #fbfaf7;
+  color: #141414;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+h1 { font-size: 1.25rem; margin: 0 0 1rem; }
+#count { font-size: 1.5rem; font-weight: 700; }
+ul { padding-left: 1.25rem; }
+li { overflow-wrap: anywhere; }
+.fail { color: #8c1d18; }
+</style>
+</head>
+<body>
+<h1>countup tests</h1>
+<p id="count">running…</p>
+<p id="zone"></p>
+<ul id="failures"></ul>
+
+<script src="countup.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var C = window.Countup;
+  var passed = 0, failed = 0, failures = [];
+
+  function test(name, fn) {
+    try {
+      fn();
+      passed++;
+    } catch (e) {
+      failed++;
+      failures.push(name + ' — ' + (e && e.message ? e.message : String(e)));
+    }
+  }
+
+  function eq(actual, expected, what) {
+    if (actual !== expected) {
+      throw new Error((what || '') + ' expected ' + JSON.stringify(expected) +
+        ', got ' + JSON.stringify(actual));
+    }
+  }
+
+  function ok(value, what) {
+    if (!value) throw new Error(what || 'expected truthy, got ' + value);
+  }
+
+  function has(list, fragment) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].indexOf(fragment) !== -1) return;
+    }
+    throw new Error('no note containing ' + JSON.stringify(fragment) +
+      ' in ' + JSON.stringify(list));
+  }
+
+  /* Calendar days between two ISO dates, built from local midnights. */
+  function days(a, b) {
+    return C.wholeDays(C.parseDate(a), C.parseDate(b));
+  }
+
+  /* Independent expectation: UTC has no DST, so a UTC millisecond quotient
+     is an exact whole-day count to compare the local arithmetic against. */
+  function utcDays(a, b) {
+    var x = a.split('-'), y = b.split('-');
+    return (Date.UTC(+y[0], +y[1] - 1, +y[2]) -
+            Date.UTC(+x[0], +x[1] - 1, +x[2])) / 86400000;
+  }
+
+  function localMidnight(y, m, d) {
+    return new Date(y, m - 1, d).getTime();
+  }
+
+  /* ---- strict date parsing ------------------------------------------- */
+
+  test('parseDate accepts a plain date', function () {
+    var d = C.parseDate('2026-08-14');
+    ok(d instanceof Date, 'a Date');
+    eq(d.getFullYear(), 2026); eq(d.getMonth(), 7); eq(d.getDate(), 14);
+  });
+
+  test('parseDate rejects 2026-02-31 instead of rolling into March',
+    function () { eq(C.parseDate('2026-02-31'), null); });
+
+  test('parseDate rejects 2026-02-29 (not a leap year)',
+    function () { eq(C.parseDate('2026-02-29'), null); });
+
+  test('parseDate accepts 2024-02-29',
+    function () { eq(C.parseDate('2024-02-29').getDate(), 29); });
+
+  test('parseDate accepts 2000-02-29 (leap century)',
+    function () { eq(C.parseDate('2000-02-29').getMonth(), 1); });
+
+  test('parseDate rejects 1900-02-29 (common century)',
+    function () { eq(C.parseDate('1900-02-29'), null); });
+
+  test('parseDate rejects April 31',
+    function () { eq(C.parseDate('2026-04-31'), null); });
+
+  test('parseDate rejects month 00 and month 13', function () {
+    eq(C.parseDate('2026-00-10'), null);
+    eq(C.parseDate('2026-13-10'), null);
+  });
+
+  test('parseDate rejects day 00', function () {
+    eq(C.parseDate('2026-01-00'), null);
+  });
+
+  test('parseDate rejects loose or padded shapes', function () {
+    var bad = ['banana', '', '2026-1-1', '20260101', '2026/01/01',
+      ' 2026-01-01', '2026-01-01 ', '2026-01-01T00:00', '99999-01-01',
+      '-2026-01-01', 'NaN', 'Invalid Date', '2026-01-0a'];
+    for (var i = 0; i < bad.length; i++) {
+      eq(C.parseDate(bad[i]), null, bad[i]);
+    }
+  });
+
+  test('parseDate rejects non-strings', function () {
+    eq(C.parseDate(null), null);
+    eq(C.parseDate(undefined), null);
+    eq(C.parseDate(20260101), null);
+    eq(C.parseDate({}), null);
+  });
+
+  test('parseDate keeps two-digit years as years 0000-0099', function () {
+    var d = C.parseDate('0099-01-02');
+    eq(d.getFullYear(), 99);
+    eq(days('0099-01-02', '0099-01-03'), 1);
+  });
+
+  /* ---- whole days across DST ------------------------------------------ */
+
+  /* These spans each straddle a real transition somewhere in the world. The
+     answers are calendar answers, so they hold whatever zone the page runs
+     in; the suite is also driven under several zones by the headless runner
+     (Pacific/Chatham +12:45/+13:45, Australia/Lord_Howe +10:30/+11:00,
+     America/Santiago, America/New_York, Europe/London, Asia/Kolkata, UTC). */
+  var dstSpans = [
+    ['2026-03-07', '2026-03-09', 2],   // US spring forward, 23 h day
+    ['2026-03-08', '2026-03-09', 1],
+    ['2026-10-31', '2026-11-02', 2],   // US fall back, 25 h day
+    ['2026-11-01', '2026-11-02', 1],
+    ['2026-03-28', '2026-03-30', 2],   // EU spring forward
+    ['2026-10-24', '2026-10-26', 2],   // EU fall back
+    ['2026-04-04', '2026-04-06', 2],   // AU / Lord Howe fall back
+    ['2026-10-03', '2026-10-05', 2],   // AU / Lord Howe spring forward
+    ['2026-04-04', '2026-04-06', 2],   // NZ / Chatham fall back
+    ['2026-09-05', '2026-09-07', 2],   // Chile spring forward
+    ['2026-03-08', '2026-11-02', 239], // both US transitions in one span
+    ['1969-07-20', '2026-08-14', 20844]
+  ];
+  for (var i = 0; i < dstSpans.length; i++) {
+    (function (span) {
+      test('whole days ' + span[0] + ' → ' + span[1], function () {
+        eq(days(span[0], span[1]), span[2]);
+        eq(days(span[1], span[0]), -span[2], 'reversed');
+        eq(utcDays(span[0], span[1]), span[2], 'independent UTC check');
+      });
+    })(dstSpans[i]);
+  }
+
+  test('local day arithmetic matches UTC day arithmetic for 2000 random ' +
+    'pairs between 1970 and 2100', function () {
+    var seed = 20260814;
+    function rnd() {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    }
+    function pick() {
+      var y = 1970 + Math.floor(rnd() * 131);
+      var m = 1 + Math.floor(rnd() * 12);
+      var dim = new Date(y, m, 0).getDate();
+      var d = 1 + Math.floor(rnd() * dim);
+      return y + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+    }
+    for (var k = 0; k < 2000; k++) {
+      var a = pick(), b = pick();
+      eq(days(a, b), utcDays(a, b), a + ' → ' + b);
+    }
+  });
+
+  test('leap day spans', function () {
+    eq(days('2024-02-28', '2024-03-01'), 2);
+    eq(days('2023-02-28', '2023-03-01'), 1);
+    eq(days('2024-01-01', '2025-01-01'), 366);
+    eq(days('2023-01-01', '2024-01-01'), 365);
+    eq(days('2000-01-01', '2001-01-01'), 366);
+    eq(days('1900-01-01', '1901-01-01'), 365);
+  });
+
+  /* ---- daysFrom, relative to a moment --------------------------------- */
+
+  test('daysFrom reads 0 for today whatever the hour', function () {
+    eq(C.daysFrom(localMidnight(2026, 8, 14), '2026-08-14'), 0);
+    eq(C.daysFrom(localMidnight(2026, 8, 14) + 1000, '2026-08-14'), 0);
+    eq(C.daysFrom(localMidnight(2026, 8, 15) - 1000, '2026-08-14'), 0);
+  });
+
+  test('daysFrom is negative in the past, positive in the future',
+    function () {
+      var now = localMidnight(2026, 8, 14) + 13 * 3600000;
+      eq(C.daysFrom(now, '2026-08-13'), -1);
+      eq(C.daysFrom(now, '2026-08-15'), 1);
+      eq(C.daysFrom(now, '1969-07-20'), -20844);
+      eq(C.daysFrom(now, '2027-08-14'), 365);
+    });
+
+  test('daysFrom returns null for a date it cannot trust', function () {
+    eq(C.daysFrom(Date.now(), 'banana'), null);
+    eq(C.daysFrom(Date.now(), '2026-02-31'), null);
+    eq(C.daysFrom(Date.now(), ''), null);
+  });
+
+  test('daysFrom is right across a spring-forward run of days', function () {
+    var start = localMidnight(2026, 3, 6);
+    for (var k = 0; k < 6; k++) {
+      var now = start + k * 86400000 + 12 * 3600000;
+      /* Adding 24 h can land on 11:00 or 13:00 across a transition, so
+         re-read the local day rather than assuming. */
+      var d = new Date(now);
+      var iso = d.getFullYear() + '-' +
+        (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) + '-' +
+        (d.getDate() < 10 ? '0' : '') + d.getDate();
+      eq(C.daysFrom(now, iso), 0, iso);
+    }
+  });
+
+  /* ---- the ticking line ----------------------------------------------- */
+
+  test('untilNextMidnight lands exactly on the next local midnight',
+    function () {
+      var samples = [
+        localMidnight(2026, 6, 15) + 13 * 3600000 + 20 * 60000 + 15000,
+        localMidnight(2026, 3, 8) + 3600000,
+        localMidnight(2026, 11, 1) + 20 * 3600000,
+        localMidnight(2026, 1, 1)
+      ];
+      for (var k = 0; k < samples.length; k++) {
+        var now = samples[k];
+        var d = new Date(now);
+        var next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+        var p = C.untilNextMidnight(now);
+        eq(p.h * 3600000 + p.m * 60000 + p.s * 1000,
+          Math.floor((next.getTime() - now) / 1000) * 1000, 'sample ' + k);
+        ok(p.m >= 0 && p.m < 60, 'minutes in range');
+        ok(p.s >= 0 && p.s < 60, 'seconds in range');
+        ok(p.h >= 0 && p.h <= 25, 'hours in range');
+      }
+    });
+
+  test('the day number and the clock roll over on the same tick', function () {
+    var eve = localMidnight(2026, 8, 15) - 1000;
+    eq(C.daysFrom(eve, '2026-08-01'), -14);
+    eq(C.formatClock(C.untilNextMidnight(eve)), '00 h 00 m 01 s');
+    var after = eve + 1000;
+    eq(C.daysFrom(after, '2026-08-01'), -15);
+    ok(C.untilNextMidnight(after).h >= 22, 'clock restarts at a full day');
+  });
+
+  test('formatClock pads to two digits', function () {
+    eq(C.formatClock({ h: 0, m: 5, s: 9 }), '00 h 05 m 09 s');
+    eq(C.formatClock({ h: 23, m: 59, s: 59 }), '23 h 59 m 59 s');
+    eq(C.formatClock({ h: 24, m: 0, s: 0 }), '24 h 00 m 00 s');
+  });
+
+  /* ---- wording --------------------------------------------------------- */
+
+  test('one day is singular in both directions', function () {
+    eq(C.phrase(-1).figure, '1');
+    eq(C.phrase(-1).unit, 'day since');
+    eq(C.phrase(1).figure, '1');
+    eq(C.phrase(1).unit, 'day until');
+  });
+
+  test('other counts are plural', function () {
+    eq(C.phrase(-2).unit, 'days since');
+    eq(C.phrase(2).unit, 'days until');
+    eq(C.phrase(-20844).unit, 'days since');
+    eq(C.phrase(365).unit, 'days until');
+    eq(C.phrase(-365).figure, '365');
+  });
+
+  test('today reads as today, with no number and no minus sign', function () {
+    eq(C.phrase(0).figure, 'Today');
+    eq(C.phrase(0).unit, '');
+  });
+
+  test('no wording ever contains a minus sign, NaN or Invalid Date',
+    function () {
+      for (var n = -400; n <= 400; n++) {
+        var p = C.phrase(n);
+        var text = p.figure + ' ' + p.unit;
+        ok(text.indexOf('-') === -1, 'minus in ' + text);
+        ok(text.indexOf('NaN') === -1, 'NaN in ' + text);
+        ok(text.indexOf('Invalid') === -1, 'Invalid in ' + text);
+      }
+    });
+
+  /* ---- title clamping -------------------------------------------------- */
+
+  test('a 10,000-character title is clamped and flagged', function () {
+    var long = new Array(10001).join('x');
+    eq(long.length, 10000);
+    var r = C.clampTitle(long);
+    eq(r.text.length, C.MAX_TITLE);
+    eq(r.truncated, true);
+  });
+
+  test('titles at or under the cap are left alone', function () {
+    var exact = new Array(C.MAX_TITLE + 1).join('y');
+    eq(C.clampTitle(exact).truncated, false);
+    eq(C.clampTitle(exact).text.length, C.MAX_TITLE);
+    eq(C.clampTitle('').text, '');
+    eq(C.clampTitle('').truncated, false);
+    eq(C.clampTitle(null).text, '');
+    eq(C.clampTitle(undefined).text, '');
+  });
+
+  /* ---- hash parsing: the spec's garbage list --------------------------- */
+
+  test('a good hash parses', function () {
+    var r = C.parseHash('#t=Moon%20landing&d=1969-07-20');
+    eq(r.title, 'Moon landing');
+    eq(r.date, '1969-07-20');
+    eq(r.notes.length, 0);
+  });
+
+  test('no hash at all is not an error', function () {
+    var r = C.parseHash('');
+    eq(r.title, ''); eq(r.date, ''); eq(r.notes.length, 0);
+    eq(C.parseHash('#').notes.length, 0);
+    eq(C.parseHash(null).date, '');
+    eq(C.parseHash(undefined).date, '');
+  });
+
+  test('#d=banana says the date is not YYYY-MM-DD', function () {
+    var r = C.parseHash('#d=banana');
+    eq(r.date, '');
+    has(r.notes, 'YYYY-MM-DD');
+  });
+
+  test('#d=2026-02-31 says it is not a real date', function () {
+    var r = C.parseHash('#d=2026-02-31');
+    eq(r.date, '');
+    has(r.notes, 'not a real date');
+  });
+
+  test('a missing d says so and keeps the title', function () {
+    var r = C.parseHash('#t=Hello');
+    eq(r.title, 'Hello');
+    eq(r.date, '');
+    has(r.notes, 'no date');
+  });
+
+  test('a missing t says so and keeps the date', function () {
+    var r = C.parseHash('#d=2026-01-01');
+    eq(r.title, '');
+    eq(r.date, '2026-01-01');
+    has(r.notes, 'no title');
+  });
+
+  test('a 10,000-character title in the hash is clamped', function () {
+    var long = new Array(10001).join('z');
+    var r = C.parseHash('#t=' + long + '&d=2026-01-01');
+    eq(r.title.length, C.MAX_TITLE);
+    eq(r.date, '2026-01-01');
+    has(r.notes, 'shortened');
+  });
+
+  test('a script tag stays literal text', function () {
+    var r = C.parseHash('#t=%3Cscript%3Ealert(1)%3C%2Fscript%3E&d=2026-01-01');
+    eq(r.title, '<script>alert(1)</script>');
+    var r2 = C.parseHash('#t=<script>alert(1)</script>&d=2026-01-01');
+    eq(r2.title, '<script>alert(1)</script>');
+  });
+
+  test('raw junk with no = at all leaves an empty, usable state', function () {
+    var r = C.parseHash('#justsomejunk');
+    eq(r.title, ''); eq(r.date, '');
+    has(r.notes, 'no counter');
+    var r2 = C.parseHash('#&&&');
+    eq(r2.date, '');
+    ok(r2.notes.length > 0, 'says something');
+  });
+
+  test('a broken percent escape is reported, not thrown', function () {
+    var r = C.parseHash('#t=%E0%A4%A&d=2026-01-01');
+    eq(r.date, '2026-01-01');
+    has(r.notes, 'could not be read');
+    var r2 = C.parseHash('#t=100%&d=%');
+    eq(r2.date, '');
+    ok(r2.notes.length > 0, 'says something');
+  });
+
+  test('empty values behave like missing ones', function () {
+    var r = C.parseHash('#t=&d=');
+    eq(r.title, ''); eq(r.date, '');
+    has(r.notes, 'no date');
+    has(r.notes, 'no title');
+  });
+
+  test('unknown keys are ignored', function () {
+    var r = C.parseHash('#x=1&t=Ok&d=2026-01-01&zz=%%%');
+    eq(r.title, 'Ok');
+    eq(r.date, '2026-01-01');
+  });
+
+  test('order does not matter and the last value of a key wins', function () {
+    eq(C.parseHash('#d=2026-01-01&t=Ok').title, 'Ok');
+    eq(C.parseHash('#d=2026-01-01&d=banana').date, '');
+    eq(C.parseHash('#d=banana&d=2026-01-01').date, '2026-01-01');
+  });
+
+  test('no parse result ever contains NaN or Invalid Date', function () {
+    var junk = ['#d=banana', '#d=2026-02-31', '#t=Hello', '#d=2026-01-01',
+      '#justsomejunk', '#t=%E0%A4%A', '#t=&d=', '#=', '#&=&', '#t',
+      '#d=0000-00-00', '#d=9999-99-99', '#d=NaN', '#d=Invalid%20Date',
+      '#t=' + new Array(10001).join('q')];
+    for (var k = 0; k < junk.length; k++) {
+      var r = C.parseHash(junk[k]);
+      var text = r.title + ' ' + r.date + ' ' + r.notes.join(' ');
+      ok(text.indexOf('NaN') === -1, 'NaN from ' + junk[k]);
+      ok(text.indexOf('Invalid Date') === -1, 'Invalid Date from ' + junk[k]);
+      eq(typeof r.title, 'string');
+      eq(typeof r.date, 'string');
+    }
+  });
+
+  /* ---- hash round trips ------------------------------------------------ */
+
+  test('titles with hash-breaking characters survive a round trip',
+    function () {
+      var titles = ['Moon landing', 'a&b', 'x=y', '#hashtag', '100%',
+        '50% & 50=100', '🎉 party 🎂', 'line\nbreak', '  padded  ',
+        '&d=2020-01-01', '?query#frag', 'quote "and" \'apostrophe\'',
+        'плюс日本語', 'a+b', 'back\\slash', 'semi;colon,comma',
+        '<script>alert(1)</script>'];
+      for (var k = 0; k < titles.length; k++) {
+        var state = { title: titles[k], date: '2026-08-14' };
+        var hash = C.serialiseHash(state);
+        ok(hash.indexOf(' ') === -1, 'no raw space in ' + hash);
+        var back = C.parseHash(hash);
+        eq(back.title, titles[k], 'title round trip');
+        eq(back.date, '2026-08-14', 'date round trip for ' + titles[k]);
+        eq(back.notes.length, 0, 'clean round trip for ' + titles[k]);
+      }
+    });
+
+  test('a round trip also survives the browser normalising the hash',
+    function () {
+      var state = { title: 'a&b=c#d 100% 🎉', date: '2024-02-29' };
+      var back = C.parseHash(decodeURI(encodeURI(C.serialiseHash(state))));
+      eq(back.title, state.title);
+      eq(back.date, state.date);
+    });
+
+  test('serialise omits empty halves', function () {
+    eq(C.serialiseHash({ title: '', date: '' }), '');
+    eq(C.serialiseHash({ title: 'Only', date: '' }), '#t=Only');
+    eq(C.serialiseHash({ title: '', date: '2026-01-01' }), '#d=2026-01-01');
+    eq(C.serialiseHash(null), '');
+    eq(C.serialiseHash(undefined), '');
+  });
+
+  test('serialise then parse is stable a second time', function () {
+    var state = { title: 'twice & again', date: '2026-12-25' };
+    var once = C.serialiseHash(state);
+    var twice = C.serialiseHash(C.parseHash(once));
+    eq(twice, once);
+  });
+
+  /* ---- report ---------------------------------------------------------- */
+
+  var total = passed + failed;
+  var line = (failed === 0 ? 'PASS ' + passed : 'FAIL ' + failed) +
+    '/' + total;
+  document.title = line;
+  document.getElementById('count').textContent = line +
+    ' (' + passed + ' passed, ' + failed + ' failed)';
+
+  try {
+    document.getElementById('zone').textContent = 'timezone: ' +
+      (Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown') +
+      ' · offset now: ' + (-new Date().getTimezoneOffset()) + ' min';
+  } catch (e) { /* Intl is optional here */ }
+
+  var list = document.getElementById('failures');
+  for (var f = 0; f < failures.length; f++) {
+    var li = document.createElement('li');
+    li.className = 'fail';
+    li.textContent = failures[f];
+    list.appendChild(li);
+  }
+})();
+</script>
+</body>
+</html>
