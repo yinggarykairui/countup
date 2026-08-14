@@ -260,11 +260,11 @@ li { overflow-wrap: anywhere; }
     });
 
   test('the day number and the clock roll over on the same tick', function () {
-    var eve = localMidnight(2026, 8, 15) - 1000;
-    eq(C.daysFrom(eve, '2026-08-01'), -14);
+    var eve = localMidnight(2026, 8, 15) - 1000;   // 23:59:59 on the 14th
+    eq(C.daysFrom(eve, '2026-08-01'), -13);
     eq(C.formatClock(C.untilNextMidnight(eve)), '00 h 00 m 01 s');
     var after = eve + 1000;
-    eq(C.daysFrom(after, '2026-08-01'), -15);
+    eq(C.daysFrom(after, '2026-08-01'), -14);
     ok(C.untilNextMidnight(after).h >= 22, 'clock restarts at a full day');
   });
 
@@ -380,9 +380,9 @@ li { overflow-wrap: anywhere; }
 
   test('a script tag stays literal text', function () {
     var r = C.parseHash('#t=%3Cscript%3Ealert(1)%3C%2Fscript%3E&d=2026-01-01');
-    eq(r.title, '<script>alert(1)</script>');
-    var r2 = C.parseHash('#t=<script>alert(1)</script>&d=2026-01-01');
-    eq(r2.title, '<script>alert(1)</script>');
+    eq(r.title, '<script>alert(1)<\/script>');
+    var r2 = C.parseHash('#t=<script>alert(1)<\/script>&d=2026-01-01');
+    eq(r2.title, '<script>alert(1)<\/script>');
   });
 
   test('raw junk with no = at all leaves an empty, usable state', function () {
@@ -445,7 +445,7 @@ li { overflow-wrap: anywhere; }
         '50% & 50=100', '🎉 party 🎂', 'line\nbreak', '  padded  ',
         '&d=2020-01-01', '?query#frag', 'quote "and" \'apostrophe\'',
         'плюс日本語', 'a+b', 'back\\slash', 'semi;colon,comma',
-        '<script>alert(1)</script>'];
+        '<script>alert(1)<\/script>'];
       for (var k = 0; k < titles.length; k++) {
         var state = { title: titles[k], date: '2026-08-14' };
         var hash = C.serialiseHash(state);
