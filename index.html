@@ -242,6 +242,7 @@ footer {
     unit: document.getElementById('unit'),
     tick: document.getElementById('tick'),
     notes: document.getElementById('notes'),
+    editor: document.getElementById('editor'),
     titleInput: document.getElementById('title-input'),
     dateInput: document.getElementById('date-input'),
     copy: document.getElementById('copy'),
@@ -460,6 +461,15 @@ footer {
     } catch (e) {
       copyFallback();
     }
+  });
+
+  /* Enter in a single-field-ish form submits it, and submitting this one
+     reloads the page — losing the counter for a moment and leaving a bare
+     '?' in the URL that then rides along in every copied link. There is
+     nothing to submit: the fields already write the hash as they are typed.
+     Both fields get the same non-answer. */
+  el.editor.addEventListener('submit', function (e) {
+    e.preventDefault();
   });
 
   el.titleInput.addEventListener('input', onEdit);
