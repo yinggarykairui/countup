@@ -55,21 +55,24 @@
     return parseDate(text) !== null;
   }
 
-  /* A whole date is eight digits: two, two and four, in whatever order the
-     browser's locale puts them. */
-  var DATE_DIGITS = 8;
-
   /* What to say about a date field that has not produced a usable date.
 
-     Blink hands the page nothing to tell the three cases apart on its own: a
-     half-typed date, a complete but impossible one (29 February 2026) and an
-     emptied field all read value === '' with validity.badInput === true. So
-     the page counts the digits the field has been given since the visitor
-     last started on it and passes the count in; eight of them is a whole
-     date, and a whole date the field refuses is a date that does not exist.
-     Browsers that hand over the text instead (a five-digit year arrives as
-     '20260-01-01') are answered from the text, which is better evidence. */
-  function dateNote(value, badInput, digits) {
+     Blink hands the page nothing to tell two of these apart: a half-typed
+     date and a complete but impossible one (31 February 2026) both read
+     value === '' with validity.badInput === true, and the segments the
+     visitor can see are in a closed user-agent shadow root — shadowRoot is
+     null, innerText is '', and no property on the element counts them.
+
+     Counting keystrokes was tried and is wrong in both directions, because
+     the segments can be filled in any order: arrowing back to the month of
+     a filled-in date and typing 02 completes an impossible 02/31/2026 in two
+     digits, and typing eight digits into month and day twice over leaves the
+     year blank. So the page no longer claims to know which of the two it is.
+     One sentence that is true of both beats a precise one that is sometimes
+     false. Browsers that hand over the text instead (a five-digit year
+     arrives as '20260-01-01') are answered from the text, which is real
+     evidence and does name the problem. */
+  function dateNote(value, badInput) {
     var text = typeof value === 'string' ? value : '';
     var m = /^(\d+)-(\d{2})-(\d{2})$/.exec(text);
     if (m && (m[1].length > 4 || +m[1] < 1)) {
@@ -77,9 +80,7 @@
     }
     if (text !== '') return 'That is not a real date. Pick another one.';
     if (!badInput) return 'Pick a date to start the counter.';
-    return (digits >= DATE_DIGITS)
-      ? 'That is not a real date. Pick another one.'
-      : 'Finish the date to start the counter.';
+    return 'That date is not complete or not real — pick one below.';
   }
 
   /* The visitor's today: the calendar day nowMs falls on by the *local*
@@ -289,7 +290,6 @@
   global.Countup = {
     MS_PER_DAY: MS_PER_DAY,
     MAX_TITLE: MAX_TITLE,
-    DATE_DIGITS: DATE_DIGITS,
     parseDate: parseDate,
     isValidDate: isValidDate,
     dateNote: dateNote,

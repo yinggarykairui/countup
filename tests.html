@@ -171,43 +171,64 @@ li { overflow-wrap: anywhere; }
   /* ---- what to say about a date field that gives nothing --------------- */
 
   /* Blink reports value === '' with badInput for an emptied field, a
-     half-typed one and a complete impossible one alike, so the digit count
-     is the only thing separating the last two. Saying "that year is out of
-     range" to someone who has just pressed Delete is a plain falsehood. */
-  test('an emptied or half-typed field is asked to be finished', function () {
-    eq(C.dateNote('', true, 0), 'Finish the date to start the counter.');
-    eq(C.dateNote('', true, 1), 'Finish the date to start the counter.');
-    eq(C.dateNote('', true, 7), 'Finish the date to start the counter.');
+     half-typed one and a complete impossible one alike, and hands the page
+     no way to tell the last two apart. The page used to count keystrokes;
+     the segments can be filled in any order, so the count was wrong in both
+     directions. One sentence covers both, and it is true of both. */
+  var UNKNOWN = 'That date is not complete or not real \u2014 pick one below.';
+
+  test('a field the browser refuses is not diagnosed beyond the evidence',
+    function () {
+      eq(C.dateNote('', true), UNKNOWN);
+    });
+
+  /* 02/31/2026 on screen: two digits typed, a complete impossible date. The
+     old count said "Finish the date", which was false. */
+  test('a complete impossible date typed in two keystrokes is not called ' +
+    'unfinished', function () {
+      var note = C.dateNote('', true);
+      ok(note.indexOf('Finish') === -1, 'claims unfinished: ' + note);
+    });
+
+  /* 12/31/____ on screen after eight digits: the old count called it unreal,
+     which was false as well. */
+  test('an unfinished date typed in eight keystrokes is not called unreal',
+    function () {
+      var note = C.dateNote('', true);
+      ok(note.indexOf('not a real date') === -1, 'claims unreal: ' + note);
+    });
+
+  test('the one sentence names both of the cases it covers', function () {
+    ok(UNKNOWN.indexOf('not complete') !== -1, UNKNOWN);
+    ok(UNKNOWN.indexOf('not real') !== -1, UNKNOWN);
   });
 
-  test('a whole date the field refuses is called unreal', function () {
-    eq(C.dateNote('', true, C.DATE_DIGITS),
+  test('text the browser does hand over is still diagnosed', function () {
+    eq(C.dateNote('2026-02-29', false),
       'That is not a real date. Pick another one.');
-    eq(C.dateNote('', true, 12), 'That is not a real date. Pick another one.');
-    /* Browsers that hand the text over say it themselves. */
-    eq(C.dateNote('2026-02-29', false, 0),
+    eq(C.dateNote('2026-02-29', true),
       'That is not a real date. Pick another one.');
   });
 
   test('an untouched empty field is asked for a date', function () {
-    eq(C.dateNote('', false, 0), 'Pick a date to start the counter.');
-    eq(C.dateNote(null, false, 0), 'Pick a date to start the counter.');
-    eq(C.dateNote(undefined, false, 99), 'Pick a date to start the counter.');
+    eq(C.dateNote('', false), 'Pick a date to start the counter.');
+    eq(C.dateNote(null, false), 'Pick a date to start the counter.');
+    eq(C.dateNote(undefined, false), 'Pick a date to start the counter.');
   });
 
   test('a year the counter cannot show is named as the year', function () {
     var msg = 'That year is out of range. Use a year between 0001 and 9999.';
-    eq(C.dateNote('20260-01-01', true, 9), msg);
-    eq(C.dateNote('123456-01-01', false, 0), msg);
-    eq(C.dateNote('0000-01-01', false, 0), msg);
+    eq(C.dateNote('20260-01-01', true), msg);
+    eq(C.dateNote('123456-01-01', false), msg);
+    eq(C.dateNote('0000-01-01', false), msg);
   });
 
   test('no date note ever mentions the year unless the year is the problem',
     function () {
-      var cases = [['', true, 0], ['', true, 8], ['', false, 0],
-        ['2026-02-31', false, 8], ['2026-13-01', false, 0]];
+      var cases = [['', true], ['', false], ['2026-02-31', false],
+        ['2026-13-01', false]];
       for (var k = 0; k < cases.length; k++) {
-        var note = C.dateNote(cases[k][0], cases[k][1], cases[k][2]);
+        var note = C.dateNote(cases[k][0], cases[k][1]);
         ok(note.indexOf('year') === -1, 'year in ' + note);
         ok(note.indexOf('NaN') === -1, 'NaN in ' + note);
         ok(note.charAt(note.length - 1) === '.', 'a sentence: ' + note);
