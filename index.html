@@ -108,12 +108,23 @@ main.empty #pagename {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.notes p, .status {
+.status {
   margin: 0;
   font-size: 0.9375rem;
   color: var(--muted);
 }
-.notes p + p { margin-top: 0.25rem; }
+/* A note is the page answering back, and it used to be set exactly like the
+   lede two paragraphs above it — same size, same grey, no edge — so on a
+   bad link the two read as one piece of copy. Full-strength ink and a rule
+   down the side make it the thing that arrived last. */
+.notes p {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--ink);
+  border-left: 2px solid var(--line);
+  padding-left: 0.75rem;
+}
+.notes p + p { margin-top: 0.35rem; }
 .notes:empty { display: none; }
 form { display: grid; gap: 1rem; margin: 0; }
 label {
