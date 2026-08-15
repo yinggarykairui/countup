@@ -205,7 +205,12 @@ footer {
   <form id="editor" autocomplete="off">
     <div>
       <label for="title-input">Title</label>
-      <input id="title-input" type="text" maxlength="120" spellcheck="false">
+      <!-- No maxlength: it counts UTF-16 units, so it cut a pasted title at
+           60 emoji and said nothing, while a 120-emoji title out of a link
+           was over its limit before the visitor typed a character and the
+           field went append-proof. clampTitle counts code points on both
+           paths, and says when it shortened something. -->
+      <input id="title-input" type="text" spellcheck="false">
     </div>
     <div>
       <label for="date-input">Date</label>
@@ -379,9 +384,19 @@ footer {
   function onEdit() {
     var clamped = C.clampTitle(el.titleInput.value);
     state.title = clamped.text;
+    if (clamped.truncated && el.titleInput.value !== clamped.text) {
+      /* The field is the copy of the title the visitor is looking at, so it
+         has to hold what the caption and the link hold. */
+      el.titleInput.value = clamped.text;
+    }
     var typed = el.dateInput.value;
     state.date = C.isValidDate(typed) ? typed : '';
-    setNotes(state.date ? [] : [dateProblem(typed)]);
+    var list = [];
+    if (!state.date) list.push(dateProblem(typed));
+    if (clamped.truncated) {
+      list.push('Title shortened to ' + C.MAX_TITLE + ' characters.');
+    }
+    setNotes(list);
     setStatus('');
     el.url.hidden = true;
     writeHash();
