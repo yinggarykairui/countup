@@ -229,12 +229,12 @@
       return out;
     }
 
-    if (rawTitle === null || rawTitle === '') {
-      /* An invitation, not a verdict: a titleless link still counts days
-         perfectly well, and the only thing left to say is what the reader
-         could do next. */
-      out.notes.push('The link has no title. Add one below if you like.');
-    } else {
+    /* A missing title is not worth a sentence. It used to get one, and on a
+       link with a broken date that sentence came first — the page opened by
+       mentioning the optional thing and then, underneath, the thing that
+       actually stopped it. The empty Title field says the same thing
+       without spending a line on it. */
+    if (rawTitle !== null && rawTitle !== '') {
       var clamped = clampTitle(rawTitle);
       out.title = clamped.text;
       if (clamped.truncated) {
@@ -245,9 +245,14 @@
     if (rawDate === null || rawDate === '') {
       out.notes.push('The link has no date. Pick one below.');
     } else if (!isValidDate(rawDate)) {
+      /* The shape is named by example rather than by a format string: the
+         rest of the page has no jargon in it, and 2026-12-25 says
+         four-digit year, two-digit month, two-digit day, hyphens, in that
+         order, to a reader who has never heard of YYYY-MM-DD. */
       out.notes.push(/^\d{4}-\d{2}-\d{2}$/.test(rawDate)
         ? 'That is not a real date. Pick one below.'
-        : 'The date in the link is not YYYY-MM-DD. Pick one below.');
+        : 'The date in the link is not written like 2026-12-25. ' +
+          'Pick one below.');
     } else {
       out.date = rawDate;
     }

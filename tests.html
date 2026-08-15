@@ -596,10 +596,13 @@ li { overflow-wrap: anywhere; }
     eq(C.parseHash(undefined).date, '');
   });
 
-  test('#d=banana says the date is not YYYY-MM-DD', function () {
+  test('#d=banana names the shape it wanted, by example', function () {
     var r = C.parseHash('#d=banana');
     eq(r.date, '');
-    has(r.notes, 'YYYY-MM-DD');
+    has(r.notes, '2026-12-25');
+    for (var i = 0; i < r.notes.length; i++) {
+      ok(r.notes[i].indexOf('YYYY') === -1, 'no format jargon in a note');
+    }
   });
 
   test('#d=2026-02-31 says it is not a real date', function () {
@@ -615,15 +618,24 @@ li { overflow-wrap: anywhere; }
     has(r.notes, 'no date');
   });
 
-  /* The link works; the note is an invitation, not a dead end. */
-  test('a missing t invites a title and keeps the date', function () {
+  /* A title is optional, so its absence is not news. The note it used to
+     get was printed above the real problem on a link that had one. */
+  test('a missing t is not reported at all', function () {
     var r = C.parseHash('#d=2026-01-01');
     eq(r.title, '');
     eq(r.date, '2026-01-01');
-    eq(r.notes.length, 1);
-    has(r.notes, 'no title');
-    has(r.notes, 'Add one below');
+    eq(r.notes.length, 0);
   });
+
+  test('a broken date is the first thing said about a broken link',
+    function () {
+      var r = C.parseHash('#d=banana');
+      eq(r.notes.length, 1);
+      has(r.notes, 'date');
+      var r2 = C.parseHash('#d=2026-02-31');
+      eq(r2.notes.length, 1);
+      has(r2.notes, 'not a real date');
+    });
 
   test('a 10,000-character title in the hash is clamped', function () {
     var long = new Array(10001).join('z');
@@ -661,8 +673,8 @@ li { overflow-wrap: anywhere; }
   test('empty values behave like missing ones', function () {
     var r = C.parseHash('#t=&d=');
     eq(r.title, ''); eq(r.date, '');
+    eq(r.notes.length, 1);
     has(r.notes, 'no date');
-    has(r.notes, 'no title');
   });
 
   test('unknown keys are ignored', function () {
