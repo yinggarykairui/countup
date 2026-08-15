@@ -130,8 +130,35 @@
     return (n < 10 ? '0' : '') + n;
   }
 
+  /* The clock inside an English sentence. "in 00 h 00 m 55 s." is a digital
+     display dropped into prose; nobody says nought hours nought minutes
+     fifty-five seconds. Leading units that are empty are dropped with their
+     zeros, and the first unit that survives loses its padding — the ones
+     after it keep two digits, because 3 h 59 m 48 s is how a duration is
+     read aloud and 3 h 59 m 8 s is not.
+
+     The line only ever shrinks, once, at each unit boundary, and the element
+     it lands in is tabular-nums, so the digits do not shuffle as they
+     count. */
   function formatClock(parts) {
-    return pad(parts.h) + ' h ' + pad(parts.m) + ' m ' + pad(parts.s) + ' s';
+    var out = [];
+    if (parts.h > 0) out.push(parts.h + ' h');
+    if (out.length > 0) out.push(pad(parts.m) + ' m');
+    else if (parts.m > 0) out.push(parts.m + ' m');
+    out.push((out.length > 0 ? pad(parts.s) : String(parts.s)) + ' s');
+    return out.join(' ');
+  }
+
+  /* The line under the figure. "This number changes in ..." names the figure
+     above it, which works for every count — except the one state where the
+     figure is not a number at all. When it reads Today there is no number on
+     the screen for the sentence to be about, so that state gets its own
+     wording and the rest are left alone. */
+  function tickLine(days, parts) {
+    var clock = formatClock(parts);
+    return days === 0
+      ? 'Today ends in ' + clock + '.'
+      : 'This number changes in ' + clock + '.';
   }
 
   /* Digits in threes, separated by a thin space (U+2009). 2912217 is the
@@ -297,6 +324,7 @@
     daysFrom: daysFrom,
     untilNextMidnight: untilNextMidnight,
     formatClock: formatClock,
+    tickLine: tickLine,
     phrase: phrase,
     clampTitle: clampTitle,
     parseHash: parseHash,

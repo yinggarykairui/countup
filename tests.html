@@ -401,7 +401,7 @@ li { overflow-wrap: anywhere; }
   test('the day number and the clock roll over on the same tick', function () {
     var eve = localMidnight(2026, 8, 15) - 1000;   // 23:59:59 on the 14th
     eq(C.daysFrom(eve, '2026-08-01'), -13);
-    eq(C.formatClock(C.untilNextMidnight(eve)), '00 h 00 m 01 s');
+    eq(C.formatClock(C.untilNextMidnight(eve)), '1 s');
     var after = eve + 1000;
     eq(C.daysFrom(after, '2026-08-01'), -14);
     ok(C.untilNextMidnight(after).h >= 22, 'clock restarts at a full day');
@@ -419,14 +419,43 @@ li { overflow-wrap: anywhere; }
         eq(p.s, Math.ceil(ms / 1000), ms + ' ms left');
       }
       eq(C.formatClock(C.untilNextMidnight(midnight - 900)),
-        '00 h 00 m 01 s');
-      eq(C.formatClock(C.untilNextMidnight(midnight - 1)), '00 h 00 m 01 s');
-      eq(C.formatClock(C.untilNextMidnight(midnight - 10400)),
-        '00 h 00 m 11 s');
+        '1 s');
+      eq(C.formatClock(C.untilNextMidnight(midnight - 1)), '1 s');
+      eq(C.formatClock(C.untilNextMidnight(midnight - 10400)), '11 s');
     });
 
-  test('formatClock pads to two digits', function () {
-    eq(C.formatClock({ h: 0, m: 5, s: 9 }), '00 h 05 m 09 s');
+  /* The figure above this line reads Today, not a number, so "This number
+     changes in ..." was about something that was not on the screen. */
+  test('the today line does not talk about a number', function () {
+    var parts = { h: 20, m: 16, s: 18 };
+    eq(C.tickLine(0, parts), 'Today ends in 20 h 16 m 18 s.');
+    ok(C.tickLine(0, parts).indexOf('number') === -1, 'names a number');
+  });
+
+  test('every other state keeps the wording it had', function () {
+    var parts = { h: 3, m: 59, s: 48 };
+    eq(C.tickLine(-20845, parts), 'This number changes in 3 h 59 m 48 s.');
+    eq(C.tickLine(1, parts), 'This number changes in 3 h 59 m 48 s.');
+    eq(C.tickLine(-1, parts), 'This number changes in 3 h 59 m 48 s.');
+  });
+
+  test('the tick line is a sentence in both branches', function () {
+    var days = [-20845, -1, 0, 1, 4000];
+    var parts = { h: 0, m: 0, s: 55 };
+    for (var k = 0; k < days.length; k++) {
+      var line = C.tickLine(days[k], parts);
+      eq(line.charAt(line.length - 1), '.', line);
+      ok(line.indexOf('55 s') !== -1, line);
+      ok(line.indexOf('00 h') === -1, 'a clock display, not prose: ' + line);
+    }
+  });
+
+  test('formatClock drops empty leading units and their zeros', function () {
+    eq(C.formatClock({ h: 0, m: 0, s: 55 }), '55 s');
+    eq(C.formatClock({ h: 0, m: 0, s: 9 }), '9 s');
+    eq(C.formatClock({ h: 0, m: 0, s: 0 }), '0 s');
+    eq(C.formatClock({ h: 0, m: 5, s: 9 }), '5 m 09 s');
+    eq(C.formatClock({ h: 3, m: 59, s: 48 }), '3 h 59 m 48 s');
     eq(C.formatClock({ h: 23, m: 59, s: 59 }), '23 h 59 m 59 s');
     eq(C.formatClock({ h: 24, m: 0, s: 0 }), '24 h 00 m 00 s');
   });

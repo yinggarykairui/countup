@@ -330,11 +330,11 @@ footer {
     el.unit.textContent = said.unit;
     el.unit.hidden = said.unit === '';
     /* "Next day in …" named nothing that was on the screen. The line names
-       the figure above it instead, and it is true of all three states: the
-       count changes at the next local midnight whether it reads Today, a
-       day since or a day until. */
-    el.tick.textContent = 'This number changes in ' +
-      C.formatClock(C.untilNextMidnight(nowMs)) + '.';
+       the figure above it instead — or, when the figure is the word Today
+       and there is no number to name, says what the countdown is really
+       counting down to. Both run out at the next local midnight. */
+    el.tick.textContent = C.tickLine(C.daysFrom(nowMs, state.date),
+      C.untilNextMidnight(nowMs));
     document.title = (state.title ? state.title + ' — ' : '') +
       (said.unit ? said.plain + ' ' + said.unit : 'today') + ' · countup';
   }
