@@ -360,21 +360,19 @@ footer {
     render(Date.now());
   }
 
-  /* A date field can hold a year of five or more digits — one stray keystroke
-     turns 2026 into 20260 — and the counter has no way to show that. Say
-     which part is wrong instead of asking for a date that is already
-     typed in. */
+  /* A date field that will not hand over a date says almost nothing about
+     why: in Blink an emptied field, a half-typed one and a complete but
+     impossible one (29 February 2026) all read '' with badInput set. The
+     only evidence the page can gather is how many digits the field has been
+     given since the visitor started on it, so it counts them and lets
+     C.dateNote turn the three cases into three sentences. Reset on focus,
+     because that is when a fresh attempt begins, and on the keys that wipe
+     what was there. */
+  var dateDigits = 0;
+
   function dateProblem(typed) {
     var v = el.dateInput.validity;
-    var m = /^(\d+)-(\d{2})-(\d{2})$/.exec(typed);
-    /* badInput: the field is showing something it cannot hand over as a
-       date, which is what a five-digit year looks like from here. */
-    if ((typed === '' && v && v.badInput) ||
-        (m && (m[1].length > 4 || +m[1] < 1))) {
-      return 'That year is out of range. Use a year between 0001 and 9999.';
-    }
-    if (typed === '') return 'Pick a date to start the counter.';
-    return 'That date cannot be used. Pick another one.';
+    return C.dateNote(typed, !!(v && v.badInput), dateDigits);
   }
 
   function onEdit() {
@@ -467,6 +465,19 @@ footer {
   el.titleInput.addEventListener('input', onEdit);
   el.dateInput.addEventListener('input', onEdit);
   el.dateInput.addEventListener('change', onEdit);
+
+  el.dateInput.addEventListener('focus', function () { dateDigits = 0; });
+  el.dateInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Escape') {
+      dateDigits = 0;
+    } else if (e.key.length === 1 && e.key >= '0' && e.key <= '9') {
+      dateDigits++;
+    }
+  });
+  /* The keystroke that completes an impossible date leaves the field's value
+     as the '' it already was, so no input event follows it. Without this the
+     note would still be describing the keystroke before. */
+  el.dateInput.addEventListener('keyup', onEdit);
 
   window.addEventListener('hashchange', function () {
     if (writingHash) return;
