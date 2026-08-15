@@ -113,10 +113,12 @@ main.empty #pagename {
   font-size: 0.9375rem;
   color: var(--muted);
 }
-/* "Link copied." and "Copy was refused…" were set identically, so the one
-   piece of good news the page has looked like the bad one. Weight and full
-   ink, not a colour the page does not otherwise use. */
-.status.done { color: var(--ink); font-weight: 500; }
+/* The two answers the copy button can give are both worth reading, so both
+   get full ink and weight — not a colour the page does not otherwise use.
+   "Link copied." was set this way and the refusal was left grey and light,
+   which put the quieter voice on the only one of the two that asks the
+   visitor to do something. #141414 on #fbfaf7 is 17.65:1. */
+.status.loud { color: var(--ink); font-weight: 500; }
 /* A note is the page answering back, and it used to be set exactly like the
    lede two paragraphs above it — same size, same grey, no edge — so on a
    bad link the two read as one piece of copy. Full-strength ink and a rule
@@ -474,18 +476,18 @@ footer {
   /* Cleared first, then set on the next turn: pressing Copy twice produces
      the same sentence, and a live region that is handed the text it already
      holds says nothing at all. */
-  function setStatus(text, done) {
+  function setStatus(text, loud) {
     if (statusTimer !== null) {
       clearTimeout(statusTimer);
       statusTimer = null;
     }
     el.status.textContent = '';
-    el.status.classList.remove('done');
+    el.status.classList.remove('loud');
     if (text === '') return;
     statusTimer = setTimeout(function () {
       statusTimer = null;
       el.status.textContent = text;
-      el.status.classList.toggle('done', !!done);
+      el.status.classList.toggle('loud', !!loud);
     }, 50);
   }
 
@@ -494,7 +496,7 @@ footer {
     el.url.hidden = false;
     selectText(el.url);
     setStatus('Copy was refused. The link is selected below — ' +
-      'press Ctrl+C or Cmd+C.');
+      'press Ctrl+C or Cmd+C.', true);
   }
 
   el.copy.addEventListener('click', function () {
