@@ -122,13 +122,26 @@ main.empty #pagename {
 /* A note is the page answering back, and it used to be set exactly like the
    lede two paragraphs above it — same size, same grey, no edge — so on a
    bad link the two read as one piece of copy. Full-strength ink and a rule
-   down the side make it the thing that arrived last. */
+   down the side make it the thing that arrived last.
+
+   That is right for a note that says something is wrong and wrong for a
+   note that says only that the visitor has not finished yet: both were
+   #141414 behind the same 2px rule, so "Pick a date to start the counter."
+   arrived with the weight of an error. The hint drops the rule and takes
+   the muted grey the rest of the secondary copy uses. Measured on #fbfaf7:
+   ink 17.65:1, muted 6.47:1 (text needs 4.5:1), rule #8a8578 3.53:1 (a
+   meaningful mark needs 3:1). */
 .notes p {
   margin: 0;
   font-size: 0.9375rem;
   color: var(--ink);
   border-left: 2px solid var(--line);
   padding-left: 0.75rem;
+}
+.notes p.hint {
+  color: var(--muted);
+  border-left: 0;
+  padding-left: 0;
 }
 .notes p + p { margin-top: 0.35rem; }
 .notes:empty { display: none; }
@@ -288,6 +301,7 @@ footer {
     for (var i = 0; i < list.length; i++) {
       var p = document.createElement('p');
       p.textContent = list[i];
+      p.className = C.noteTone(list[i]);
       el.notes.appendChild(p);
     }
   }

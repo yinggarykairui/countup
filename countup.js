@@ -83,6 +83,31 @@
     return 'That date is not complete or not real — pick one below.';
   }
 
+  /* Two kinds of note reach the page and they used to look identical: "That
+     is not a real date." (something is wrong) and "Pick a date to start the
+     counter." (nothing is wrong, you are not finished). The first keeps the
+     rule and the full ink; the second is a hint and is set quietly.
+
+     Matched on the sentences the page actually writes, by prefix, so a note
+     nobody has classified is a hint rather than an alarm. The half-typed
+     date sentence is deliberately a hint: the page cannot tell whether
+     anything is broken there, so it does not raise its voice. */
+  var BROKEN = [
+    'That is not a real date',
+    'That year is out of range',
+    'The date in the link is not written like',
+    'Part of the link could not be read',
+    'That link could not be read'
+  ];
+
+  function noteTone(text) {
+    var t = String(text == null ? '' : text);
+    for (var i = 0; i < BROKEN.length; i++) {
+      if (t.indexOf(BROKEN[i]) === 0) return 'error';
+    }
+    return 'hint';
+  }
+
   /* The visitor's today: the calendar day nowMs falls on by the *local*
      clock, carried as a UTC-midnight Date like every other date here. */
   function today(nowMs) {
@@ -332,6 +357,7 @@
     parseDate: parseDate,
     isValidDate: isValidDate,
     dateNote: dateNote,
+    noteTone: noteTone,
     wholeDays: wholeDays,
     daysFrom: daysFrom,
     untilNextMidnight: untilNextMidnight,

@@ -490,6 +490,62 @@ li { overflow-wrap: anywhere; }
     eq(C.parseHash('').shortened, false);
   });
 
+  /* One style for two severities read as one severity: "That is not a real
+     date." and "Pick a date to start the counter." were both full ink
+     behind the same rule. */
+  test('a note about something broken is an error', function () {
+    eq(C.noteTone('That is not a real date. Pick another one.'), 'error');
+    eq(C.noteTone('That is not a real date. Pick one below.'), 'error');
+    eq(C.noteTone(C.dateNote('2026-02-29', false)), 'error');
+    eq(C.noteTone(C.dateNote('20260-01-01', true)), 'error');
+    eq(C.noteTone('The date in the link is not written like 2026-12-25. ' +
+      'Pick one below.'), 'error');
+    eq(C.noteTone('Part of the link could not be read.'), 'error');
+    eq(C.noteTone('That link could not be read.'), 'error');
+  });
+
+  test('a note about being unfinished is only a hint', function () {
+    eq(C.noteTone(C.dateNote('', false)), 'hint');
+    eq(C.noteTone(C.dateNote('', true)), 'hint');
+    eq(C.noteTone('The link has no date. Pick one below.'), 'hint');
+    eq(C.noteTone('The link carries no counter. Set one below.'), 'hint');
+    eq(C.noteTone('Title shortened to 120 characters.'), 'hint');
+  });
+
+  test('an unclassified note does not raise an alarm', function () {
+    eq(C.noteTone('Something nobody wrote a rule for.'), 'hint');
+    eq(C.noteTone(''), 'hint');
+    eq(C.noteTone(null), 'hint');
+    eq(C.noteTone(undefined), 'hint');
+  });
+
+  /* Every sentence the page can put in the notes list is one or the other,
+     and both are among them — a classifier that answered 'hint' to
+     everything would pass the tests above but not this one. */
+  test('both tones are in use across the notes the page can write',
+    function () {
+      var written = [
+        C.parseHash('#d=banana').notes,
+        C.parseHash('#d=2026-02-31').notes,
+        C.parseHash('#t=x').notes,
+        C.parseHash('#%%%=1').notes,
+        C.parseHash('nokeys').notes,
+        [C.dateNote('', true), C.dateNote('', false),
+          C.dateNote('0000-01-01', false),
+          'Title shortened to 120 characters.']
+      ];
+      var tones = {};
+      for (var k = 0; k < written.length; k++) {
+        for (var j = 0; j < written[k].length; j++) {
+          var tone = C.noteTone(written[k][j]);
+          ok(tone === 'error' || tone === 'hint', tone);
+          tones[tone] = true;
+        }
+      }
+      ok(tones.error, 'no error tone in use');
+      ok(tones.hint, 'no hint tone in use');
+    });
+
   /* ---- wording --------------------------------------------------------- */
 
   test('one day is singular in both directions', function () {
