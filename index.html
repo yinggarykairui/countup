@@ -503,14 +503,19 @@ footer {
     }
   });
 
-  /* start() runs whatever the link said. A counter that cannot be read is a
-     page with an empty form on it, not a page that never wakes up. */
+  /* The page renders whatever the link said. A counter that cannot be read
+     is a page with an empty form on it, not a page that never wakes up.
+
+     Ticking waits on the tab being visible: a tab restored or opened in the
+     background is hidden from its first frame and never fires
+     visibilitychange, so starting the interval here unconditionally left it
+     running in a tab nobody was looking at. */
   try {
     loadFromHash();
   } catch (e) {
     setNotes(['That link could not be read.']);
   }
-  start();
+  if (!document.hidden) start();
 })();
 </script>
 </body>
