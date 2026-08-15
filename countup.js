@@ -128,13 +128,26 @@
     return pad(parts.h) + ' h ' + pad(parts.m) + ' m ' + pad(parts.s) + ' s';
   }
 
-  /* Big figure plus its unit line. Today gets a word, not a zero. */
+  /* Digits in threes, separated by a thin space (U+2009). 2912217 is the
+     whole product of this page and unreadable in one glance; 2 912 217 is
+     not. A thin space rather than a comma or a full stop because those two
+     mean opposite things in different countries and this page has no
+     locale to consult. */
+  function group(digits) {
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  }
+
+  /* Big figure plus its unit line. Today gets a word, not a zero.
+     `plain` is the same figure in bare digits, for the places grouping does
+     not help: the screen-reader line and the tab title. */
   function phrase(days) {
-    if (days === 0) return { figure: 'Today', unit: '' };
-    var n = Math.abs(days);
+    if (days === 0) return { figure: 'Today', plain: 'Today', unit: '' };
+    var n = String(Math.abs(days));
     return {
-      figure: String(n),
-      unit: (n === 1 ? 'day ' : 'days ') + (days < 0 ? 'since' : 'until')
+      figure: group(n),
+      plain: n,
+      unit: (Math.abs(days) === 1 ? 'day ' : 'days ') +
+        (days < 0 ? 'since' : 'until')
     };
   }
 

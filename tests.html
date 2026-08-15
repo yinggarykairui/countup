@@ -409,7 +409,31 @@ li { overflow-wrap: anywhere; }
 
   test('today reads as today, with no number and no minus sign', function () {
     eq(C.phrase(0).figure, 'Today');
+    eq(C.phrase(0).plain, 'Today');
     eq(C.phrase(0).unit, '');
+  });
+
+  /* The figure is the product. Ungrouped, 2912217 has to be counted with a
+     finger. The separator is a thin space because a comma and a full stop
+     mean opposite things depending on where the reader is. */
+  test('the figure is grouped in threes with a thin space', function () {
+    eq(C.phrase(-20845).figure, '20 845');
+    eq(C.phrase(-2912217).figure, '2 912 217');
+    eq(C.phrase(1000).figure, '1 000');
+    eq(C.phrase(-999).figure, '999');
+    eq(C.phrase(-100).figure, '100');
+    eq(C.phrase(-1).figure, '1');
+  });
+
+  test('the spoken figure keeps bare digits', function () {
+    eq(C.phrase(-2912217).plain, '2912217');
+    eq(C.phrase(20845).plain, '20845');
+    eq(C.phrase(-7).plain, '7');
+    for (var n = -3000; n <= 3000; n += 7) {
+      var p = C.phrase(n);
+      eq(p.plain.replace(/ /g, ''), p.plain, 'no thin space in ' + p.plain);
+      eq(p.figure.replace(/ /g, ''), p.plain, 'same digits either way');
+    }
   });
 
   test('no wording ever contains a minus sign, NaN or Invalid Date',

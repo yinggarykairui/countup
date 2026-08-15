@@ -310,7 +310,10 @@ footer {
     var said = C.phrase(days);
     el.counter.hidden = false;
     showIntro(false);
-    announce(said.unit ? said.figure + ' ' + said.unit + '.' : said.figure + '.');
+    /* Bare digits here and in the tab title: a screen reader reading
+       "2 912 217" would say three numbers, and a thin space in a tab title
+       is a space nobody asked for. */
+    announce(said.unit ? said.plain + ' ' + said.unit + '.' : said.plain + '.');
     el.title.hidden = state.title === '';
     el.title.textContent = state.title;
     el.figure.textContent = said.figure;
@@ -319,7 +322,7 @@ footer {
     el.tick.textContent = 'Next day in ' +
       C.formatClock(C.untilNextMidnight(nowMs)) + '.';
     document.title = (state.title ? state.title + ' — ' : '') +
-      (said.unit ? said.figure + ' ' + said.unit : 'today') + ' · countup';
+      (said.unit ? said.plain + ' ' + said.unit : 'today') + ' · countup';
   }
 
   /* The address bar is a convenience; the counter on screen is the product.
