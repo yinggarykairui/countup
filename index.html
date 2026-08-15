@@ -377,6 +377,7 @@ footer {
     el.titleInput.value = state.title;
     el.dateInput.value = state.date;
     setNotes(read.notes);
+    seen = reading();
     /* The old status was about the old link. */
     setStatus('');
     el.url.hidden = true;
@@ -399,7 +400,26 @@ footer {
     return C.dateNote(typed, !!(v && v.badInput));
   }
 
+  /* What the two fields last held, so a keystroke that changes nothing can
+     be told from one that changes something. A bare ArrowRight in the date
+     field used to run the whole of onEdit: it re-derived the note from an
+     empty field (flipping "That is not a real date", which was about the
+     link, to "Pick a date") and wiped "Link copied." off a link that was
+     still perfectly good. badInput is part of the reading because a date
+     field can change from half-typed to impossible without its value ever
+     leaving ''. */
+  var seen = null;
+
+  function reading() {
+    var v = el.dateInput.validity;
+    return JSON.stringify([el.titleInput.value, el.dateInput.value,
+      !!(v && v.badInput)]);
+  }
+
   function onEdit() {
+    var now = reading();
+    if (now === seen) return;
+    seen = now;
     var clamped = C.clampTitle(el.titleInput.value);
     state.title = clamped.text;
     if (clamped.truncated && el.titleInput.value !== clamped.text) {
@@ -419,6 +439,9 @@ footer {
     el.url.hidden = true;
     writeHash();
     render(Date.now());
+    /* Clamping can have rewritten the title field; the next keystroke must
+       not read that as a change the visitor made. */
+    seen = reading();
   }
 
   /* One interval, one Date.now() per tick, so the day number and the clock
