@@ -184,6 +184,17 @@
     };
   }
 
+  /* The caption for a title, which is the stored title unless the stored
+     title is a cut one. A 150-character title ended mid-word — "...to think
+     about it at a" — and read as a typo rather than as a cut. The ellipsis
+     is added to the caption only: the title that is stored, hashed, put in
+     the field and counted against the 120 stays exactly as long as it was,
+     so the link still round-trips and the note still says what happened. */
+  function caption(title, shortened) {
+    var text = String(title == null ? '' : title);
+    return (shortened && text !== '') ? text + '\u2026' : text;
+  }
+
   /* Splits a string into code points, dropping any unpaired surrogate.
      slice() counts UTF-16 units, so cutting a title at 120 units can land
      between the two halves of an emoji and leave a lone surrogate;
@@ -238,7 +249,7 @@
      percent signs, and every value here came from someone else's link.
      notes[] holds plain sentences about anything that was wrong. */
   function parseHash(hash) {
-    var out = { title: '', date: '', notes: [] };
+    var out = { title: '', date: '', shortened: false, notes: [] };
     var raw = String(hash == null ? '' : hash).replace(/^#/, '');
     if (raw === '') return out;
 
@@ -271,6 +282,7 @@
     if (rawTitle !== null && rawTitle !== '') {
       var clamped = clampTitle(rawTitle);
       out.title = clamped.text;
+      out.shortened = clamped.truncated;
       if (clamped.truncated) {
         out.notes.push('Title shortened to ' + MAX_TITLE + ' characters.');
       }
@@ -327,6 +339,7 @@
     tickLine: tickLine,
     phrase: phrase,
     clampTitle: clampTitle,
+    caption: caption,
     parseHash: parseHash,
     serialiseHash: serialiseHash
   };

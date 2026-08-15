@@ -272,7 +272,7 @@ footer {
     url: document.getElementById('url')
   };
 
-  var state = { title: '', date: '' };
+  var state = { title: '', date: '', shortened: false };
   var notes = [];
   var timer = null;
   var writingHash = false;
@@ -327,7 +327,7 @@ footer {
        is a space nobody asked for. */
     announce(said.unit ? said.plain + ' ' + said.unit + '.' : said.plain + '.');
     el.title.hidden = state.title === '';
-    el.title.textContent = state.title;
+    el.title.textContent = C.caption(state.title, state.shortened);
     el.figure.textContent = said.figure;
     el.unit.textContent = said.unit;
     el.unit.hidden = said.unit === '';
@@ -376,6 +376,7 @@ footer {
     }
     state.title = read.title;
     state.date = read.date;
+    state.shortened = read.shortened;
     el.titleInput.value = state.title;
     el.dateInput.value = state.date;
     setNotes(read.notes);
@@ -424,6 +425,7 @@ footer {
     seen = now;
     var clamped = C.clampTitle(el.titleInput.value);
     state.title = clamped.text;
+    state.shortened = clamped.truncated;
     if (clamped.truncated && el.titleInput.value !== clamped.text) {
       /* The field is the copy of the title the visitor is looking at, so it
          has to hold what the caption and the link hold. */

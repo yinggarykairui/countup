@@ -460,6 +460,36 @@ li { overflow-wrap: anywhere; }
     eq(C.formatClock({ h: 24, m: 0, s: 0 }), '24 h 00 m 00 s');
   });
 
+  /* A caption that stops mid-word with no mark on it reads as a typo, not
+     as a cut. The mark is on the caption only — the stored title is what
+     goes in the hash and has to round-trip. */
+  test('a shortened title is shown with a cut marker', function () {
+    eq(C.caption('cut here', true), 'cut here\u2026');
+    eq(C.caption('cut here', false), 'cut here');
+    eq(C.caption('', true), '');
+    eq(C.caption(null, true), '');
+    eq(C.caption(undefined, false), '');
+  });
+
+  test('the marker is not stored, hashed or counted', function () {
+    var long = '';
+    while (long.length < 150) long += 'word ';
+    var read = C.parseHash('#t=' + encodeURIComponent(long) + '&d=2026-01-01');
+    ok(read.shortened, 'parseHash reports the cut');
+    eq(read.title.length, C.MAX_TITLE);
+    eq(C.caption(read.title, read.shortened).length, C.MAX_TITLE + 1);
+    ok(read.title.indexOf('\u2026') === -1, 'marker stored');
+    ok(C.serialiseHash(read).indexOf('%E2%80%A6') === -1, 'marker hashed');
+    /* Re-reading the link the page writes must not grow a second marker. */
+    eq(C.parseHash(C.serialiseHash(read)).shortened, false);
+  });
+
+  test('a title that fits reports no cut', function () {
+    eq(C.parseHash('#t=Moon%20landing&d=1969-07-20').shortened, false);
+    eq(C.parseHash('#d=1969-07-20').shortened, false);
+    eq(C.parseHash('').shortened, false);
+  });
+
   /* ---- wording --------------------------------------------------------- */
 
   test('one day is singular in both directions', function () {
