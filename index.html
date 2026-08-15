@@ -315,14 +315,9 @@ footer {
       document.title = BASE_TITLE;
       return;
     }
-    var days = C.daysFrom(nowMs, state.date);
-    if (days === null) {          // unreachable: state.date is validated
-      el.counter.hidden = true;
-      showIntro(true);
-      announce('');
-      return;
-    }
-    var said = C.phrase(days);
+    /* state.date is only ever set to a date that parsed, so daysFrom
+       cannot come back null here. */
+    var said = C.phrase(C.daysFrom(nowMs, state.date));
     el.counter.hidden = false;
     showIntro(false);
     /* Bare digits here and in the tab title: a screen reader reading
@@ -356,10 +351,14 @@ footer {
       try {
         history.replaceState(null, '', base + hash);
       } catch (e) {
-        /* Some browsers refuse replaceState on file:// URLs. */
+        /* Some browsers refuse replaceState on file:// URLs. Writing
+           location.hash queues a hashchange as a task, so the flag has to
+           survive until that task runs — clearing it here, synchronously,
+           cleared it before the event it was guarding against ever
+           arrived, and the handler then reloaded state the page had just
+           written. The handler clears it instead. */
         writingHash = true;
         location.hash = hash.replace(/^#/, '');
-        writingHash = false;
       }
     } catch (e) {
       writingHash = false;
@@ -529,7 +528,7 @@ footer {
   el.dateInput.addEventListener('keyup', onEdit);
 
   window.addEventListener('hashchange', function () {
-    if (writingHash) return;
+    if (writingHash) { writingHash = false; return; }
     loadFromHash();
   });
 
