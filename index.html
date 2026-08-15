@@ -501,11 +501,11 @@ footer {
     }
   });
 
-  /* Enter in a single-field-ish form submits it, and submitting this one
-     reloads the page — losing the counter for a moment and leaving a bare
-     '?' in the URL that then rides along in every copied link. There is
-     nothing to submit: the fields already write the hash as they are typed.
-     Both fields get the same non-answer. */
+  /* Enter in either field submits the form, and submitting this one reloads
+     the page: the counter goes away for a moment and the URL picks up a
+     bare '?' that then rides along in every copied link. There is nothing
+     to submit — the fields write the hash as they are typed — so both
+     fields get the same non-answer. */
   el.editor.addEventListener('submit', function (e) {
     e.preventDefault();
   });
