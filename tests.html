@@ -368,10 +368,12 @@ li { overflow-wrap: anywhere; }
         var next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
         var p = C.untilNextMidnight(now);
         eq(p.h * 3600000 + p.m * 60000 + p.s * 1000,
-          Math.floor((next.getTime() - now) / 1000) * 1000, 'sample ' + k);
+          Math.ceil((next.getTime() - now) / 1000) * 1000, 'sample ' + k);
         ok(p.m >= 0 && p.m < 60, 'minutes in range');
         ok(p.s >= 0 && p.s < 60, 'seconds in range');
-        ok(p.h >= 0 && p.h <= 25, 'hours in range');
+        /* 26, not 25: Antarctica/Troll shifts two hours at once, so its
+           fall-back day is 26 hours long and the clock says so. */
+        ok(p.h >= 0 && p.h <= 26, 'hours in range');
       }
     });
 
@@ -383,6 +385,24 @@ li { overflow-wrap: anywhere; }
     eq(C.daysFrom(after, '2026-08-01'), -14);
     ok(C.untilNextMidnight(after).h >= 22, 'clock restarts at a full day');
   });
+
+  /* A floored countdown is a second short all the way down and then parks
+     on 00 s for a whole second while the number above it does not move. */
+  test('the seconds line counts down to 01 s and never sits on 00',
+    function () {
+      var midnight = localMidnight(2026, 8, 15);
+      for (var ms = 1; ms <= 3500; ms += 37) {
+        var p = C.untilNextMidnight(midnight - ms);
+        ok(p.s !== 0 || p.m !== 0 || p.h !== 0,
+          'zero clock with ' + ms + ' ms left');
+        eq(p.s, Math.ceil(ms / 1000), ms + ' ms left');
+      }
+      eq(C.formatClock(C.untilNextMidnight(midnight - 900)),
+        '00 h 00 m 01 s');
+      eq(C.formatClock(C.untilNextMidnight(midnight - 1)), '00 h 00 m 01 s');
+      eq(C.formatClock(C.untilNextMidnight(midnight - 10400)),
+        '00 h 00 m 11 s');
+    });
 
   test('formatClock pads to two digits', function () {
     eq(C.formatClock({ h: 0, m: 5, s: 9 }), '00 h 05 m 09 s');

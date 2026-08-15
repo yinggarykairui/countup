@@ -319,7 +319,11 @@ footer {
     el.figure.textContent = said.figure;
     el.unit.textContent = said.unit;
     el.unit.hidden = said.unit === '';
-    el.tick.textContent = 'Next day in ' +
+    /* "Next day in …" named nothing that was on the screen. The line names
+       the figure above it instead, and it is true of all three states: the
+       count changes at the next local midnight whether it reads Today, a
+       day since or a day until. */
+    el.tick.textContent = 'This number changes in ' +
       C.formatClock(C.untilNextMidnight(nowMs)) + '.';
     document.title = (state.title ? state.title + ' — ' : '') +
       (said.unit ? said.plain + ' ' + said.unit : 'today') + ' · countup';

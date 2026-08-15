@@ -111,12 +111,17 @@
   /* Time left before the day number changes, i.e. until the next local
      midnight. One Date.now() feeds this and daysFrom on every tick, so the
      two lines can never disagree at a rollover. A fall-back day makes this
-     25 hours long, so hours can read 24; that is the honest number. */
+     25 hours long, so hours can read 24; that is the honest number.
+
+     Rounded up, not down: with 900 ms left a floor reads 00 s, which is
+     both a second short and a full second of a countdown sitting on zero
+     while nothing happens. Ceiling counts 03 s, 02 s, 01 s and then the day
+     changes. */
   function untilNextMidnight(nowMs) {
     var d = new Date(nowMs);
     var next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
     var left = Math.max(0, next.getTime() - nowMs);
-    var s = Math.floor(left / 1000);
+    var s = Math.ceil(left / 1000);
     return { h: Math.floor(s / 3600), m: Math.floor(s / 60) % 60, s: s % 60 };
   }
 
