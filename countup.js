@@ -192,10 +192,16 @@
     return codePoints(t);
   }
 
+  /* A title of nothing but spaces is no title: it draws a blank caption,
+     writes '#t=%20%20%20' into the link and puts a dangling em dash in the
+     tab title. Spaces inside a title are left alone — '  padded  ' is a
+     choice someone made — but a title that is only spaces is not one. */
   function clampTitle(text) {
     var cps = cleanTitle(text);
+    var whole = cps.join('');
+    if (!/\S/.test(whole)) return { text: '', truncated: false };
     if (cps.length <= MAX_TITLE) {
-      return { text: cps.join(''), truncated: false };
+      return { text: whole, truncated: false };
     }
     return { text: cps.slice(0, MAX_TITLE).join(''), truncated: true };
   }

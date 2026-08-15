@@ -554,6 +554,23 @@ li { overflow-wrap: anywhere; }
     eq(over.text, emoji);
   });
 
+  /* A caption of three spaces is a blank line, but it still wrote
+     #t=%20%20%20 into the link and "  — 2357 days since · countup" into
+     the tab, em dash and all. */
+  test('a title of nothing but spaces is no title', function () {
+    eq(C.clampTitle('   ').text, '');
+    eq(C.clampTitle('   ').truncated, false);
+    eq(C.clampTitle('\t\n ').text, '');
+    eq(C.clampTitle(' ').text, '');
+    eq(C.clampTitle(new Array(400).join(' ')).text, '');
+    eq(C.parseHash('#t=%20%20%20&d=2020-01-01').title, '');
+    eq(C.serialiseHash(C.parseHash('#t=%20%20%20&d=2020-01-01')),
+      '#d=2020-01-01');
+    /* Spaces around a real title are still the visitor's business. */
+    eq(C.clampTitle('  padded  ').text, '  padded  ');
+    eq(C.clampTitle(' . ').text, ' . ');
+  });
+
   /* ---- control characters in a title ----------------------------------- */
 
   /* A newline used to reach the caption but not the single-line field, so
